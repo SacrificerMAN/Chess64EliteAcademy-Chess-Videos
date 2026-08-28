@@ -1,15 +1,8 @@
 FROM python:3.12-slim-bookworm
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ffmpeg \
-    libcairo2 \
-    libpango-1.0-0 \
-    libpangocairo-1.0-0 \
-    libgdk-pixbuf-2.0-0 \
-    shared-mime-info \
-    fonts-dejavu-core \
-    curl \
-    unzip \
+    ffmpeg libcairo2 libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf-2.0-0 \
+    shared-mime-info fonts-dejavu-core curl unzip \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl -sL "https://github.com/official-stockfish/Stockfish/releases/download/sf_16/stockfish-ubuntu-x86-64.tar" \
@@ -22,24 +15,12 @@ RUN curl -sL "https://github.com/official-stockfish/Stockfish/releases/download/
 WORKDIR /app
 COPY . .
 
-# Extract bundle for agent/traps/sounds; keep repo webapp if present
 RUN if [ -f chess64_final_bundle.zip ]; then \
-      unzip -o chess64_final_bundle.zip -d /tmp/bundle && \
-      for f in chess_video_agent_v2.py chess_telegram_bot_v2.py youtube_uploader.py watch_folder.py \
-               chess_agent_config.json requirements_chess_agent_v2.txt \
-               chess_move_self.mp3 chess_capture.mp3 chess_move_check.mp3; do \
-        if [ -f /tmp/bundle/$f ]; then cp -f /tmp/bundle/$f /app/$f; fi; \
-      done && \
-      if [ -d /tmp/bundle/traps ]; then cp -rf /tmp/bundle/traps /app/; fi && \
-      if [ ! -f /app/webapp/app.py ] && [ -d /tmp/bundle/webapp ]; then cp -rf /tmp/bundle/webapp /app/; fi && \
+      unzip -o chess64_final_bundle.zip -d /app && \
       rm -f chess64_final_bundle.zip; \
     fi
 
-RUN if [ -f requirements_chess_agent_v2.txt ]; then \
-      pip install --no-cache-dir -r requirements_chess_agent_v2.txt; \
-    else \
-      pip install --no-cache-dir fastapi "uvicorn[standard]" python-multipart chess cairosvg moviepy pillow edge-tts numpy; \
-    fi
+RUN pip install --no-cache-dir -r requirements_chess_agent_v2.txt
 
 ENV STOCKFISH_PATH=/usr/local/bin/stockfish
 ENV PYTHONUNBUFFERED=1
