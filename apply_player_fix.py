@@ -102,7 +102,7 @@ pattern_slug = re.compile(
 )
 text2, n1 = pattern_slug.subn(NEW_SLUG, text, count=1)
 
-# --- 2) resolve_player_assets with name verification ---
+# --- 2) resolve_player_assets with name verification + force refresh ---
 NEW_RESOLVE = r'''def resolve_player_assets(display_name: str) -> tuple:
     """
     Returns (photo_path, flag_path) using Chess.com avatar + country flag.
@@ -151,11 +151,14 @@ NEW_RESOLVE = r'''def resolve_player_assets(display_name: str) -> tuple:
         if avatar_url:
             safe = _re.sub(r"[^a-zA-Z0-9_-]", "_", (used_user or display_name).lower())[:40]
             dest = players_dir / f"{safe}.jpg"
-            if not dest.exists() or dest.stat().st_size < 500:
+            # Always refresh for known GMs so stale wrong avatars (e.g. cat) get replaced
+            force = used_user in KNOWN_USERNAMES.values()
+            if force or not dest.exists() or dest.stat().st_size < 500:
                 try:
                     req = urllib.request.Request(avatar_url, headers={"User-Agent": "ChessVideoAgent/1.0"})
                     with urllib.request.urlopen(req, timeout=10) as r:
                         dest.write_bytes(r.read())
+                    print(f"  avatar ok: {display_name} → {used_user} ({dest.stat().st_size}b)")
                 except Exception as e:
                     print(f"  avatar download failed for {display_name}: {e}")
             if dest.exists() and dest.stat().st_size > 500:
