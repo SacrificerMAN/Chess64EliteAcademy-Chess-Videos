@@ -1,0 +1,8 @@
+[Event "Lasker Trap Refutation"]
+[Site "Trap Library"]
+[White "White"]
+[Black "Black"]
+[Result "1-0"]
+[ECO "D08"]
+
+1. d4 d5 2. c4 e5 3. dxe5 d4 4. Nf3 1-0
