@@ -16,9 +16,18 @@ WORKDIR /app
 COPY . .
 
 RUN if [ -f chess64_final_bundle.zip ]; then \
-      unzip -o chess64_final_bundle.zip -d /app && \
+      unzip -o chess64_final_bundle.zip -d /tmp/bundle && \
+      for f in chess_video_agent_v2.py chess_telegram_bot_v2.py youtube_uploader.py watch_folder.py \
+               chess_agent_config.json requirements_chess_agent_v2.txt \
+               chess_move_self.mp3 chess_capture.mp3 chess_move_check.mp3; do \
+        if [ -f /tmp/bundle/$f ]; then cp -f /tmp/bundle/$f /app/$f; fi; \
+      done && \
+      if [ -d /tmp/bundle/traps ]; then cp -rf /tmp/bundle/traps /app/; fi && \
       rm -f chess64_final_bundle.zip; \
     fi
+
+RUN if [ -f webapp/_parts/assemble.sh ]; then sh webapp/_parts/assemble.sh; fi
+RUN touch webapp/__init__.py
 
 RUN pip install --no-cache-dir -r requirements_chess_agent_v2.txt
 
