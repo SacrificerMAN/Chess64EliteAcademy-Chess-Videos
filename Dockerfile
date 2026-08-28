@@ -15,24 +15,34 @@ RUN curl -sL "https://github.com/official-stockfish/Stockfish/releases/download/
 WORKDIR /app
 COPY . .
 
+# Prefer fixed agent from base64 parts (photo/flag fix)
+RUN if [ -d agent_parts ] && [ -f agent_parts/assemble_agent.sh ]; then \
+      sh agent_parts/assemble_agent.sh; \
+    fi
+
+# Fallback: unzip bundle if agent still missing / incomplete
 RUN if [ -f chess64_final_bundle.zip ]; then \
       unzip -o chess64_final_bundle.zip -d /tmp/bundle && \
-      for f in chess_video_agent_v2.py chess_telegram_bot_v2.py youtube_uploader.py watch_folder.py \
+      for f in chess_telegram_bot_v2.py youtube_uploader.py watch_folder.py \
                chess_agent_config.json requirements_chess_agent_v2.txt \
                chess_move_self.mp3 chess_capture.mp3 chess_move_check.mp3; do \
         if [ -f /tmp/bundle/$f ]; then cp -f /tmp/bundle/$f /app/$f; fi; \
       done && \
+      if [ ! -f /app/chess_video_agent_v2.py ] && [ -f /tmp/bundle/chess_video_agent_v2.py ]; then \
+        cp -f /tmp/bundle/chess_video_agent_v2.py /app/; \
+      fi && \
       if [ -d /tmp/bundle/traps ]; then cp -rf /tmp/bundle/traps /app/; fi && \
-      rm -f chess64_final_bundle.zip; \
+      rm -rf /tmp/bundle chess64_final_bundle.zip; \
     fi
 
-# Local PGN names (Last, First) → Chess.com avatar + flag
+# Patch local-PGN names (Last, First) → correct Chess.com avatar (safety net)
 RUN if [ -f apply_player_fix.py ]; then python3 apply_player_fix.py; fi
 
 RUN if [ -f webapp/_parts/assemble.sh ]; then sh webapp/_parts/assemble.sh; fi
 RUN touch webapp/__init__.py
 
-RUN pip install --no-cache-dir -r requirements_chess_agent_v2.txt
+RUN pip install --no-cache-dir -r requirements_chess_agent_v2.txt \
+    && rm -rf /root/.cache/pip /tmp/*
 
 ENV STOCKFISH_PATH=/usr/local/bin/stockfish
 ENV PYTHONUNBUFFERED=1
