@@ -1,4 +1,4 @@
-"""Correct Chess.com photo/flag resolver for local PGN names (Last, First)."""
+"""Chess.com photo/flag resolver — local PGN names (Last, First) + recent games helper."""
 from __future__ import annotations
 import json
 import re
@@ -32,33 +32,77 @@ KNOWN = {
     "gukesh": "GukeshDommaraju",
     "anish giri": "AnishGiri",
     "levon aronian": "LevAronian",
+    # Duda
+    "jan-krzysztof duda": "Polish_fighter3000",
+    "jan krzysztof duda": "Polish_fighter3000",
+    "duda, jan-krzysztof": "Polish_fighter3000",
+    "duda, jan krzysztof": "Polish_fighter3000",
+    "duda": "Polish_fighter3000",
+    # Erigaisi (all name orders)
+    "arjun erigaisi": "GHANDEEVAM2003",
+    "erigaisi arjun": "GHANDEEVAM2003",
+    "erigaisi, arjun": "GHANDEEVAM2003",
+    "erigaisi": "GHANDEEVAM2003",
+    "ghandeevam2003": "GHANDEEVAM2003",
+    "nodirbek abdusattorov": "ChessWarrior7197",
+    "richard rapport": "rapport67",
+    "shakhriyar mamedyarov": "LordShakh",
+    "maxime vachier-lagrave": "LyonCat",
+    "maxime vachier lagrave": "LyonCat",
+    "viswanathan anand": "Viswanathananand",
+    "sergey karjakin": "SergeyKarjakin",
+    "vladimir kramnik": "VladimirKramnik",
 }
+
 
 def _candidates(name: str):
     n = (name or "").strip()
     if not n:
         return []
     out, seen = [], set()
+
     def add(x):
         if x and x.lower() not in seen:
-            seen.add(x.lower()); out.append(x)
+            seen.add(x.lower())
+            out.append(x)
+
     key = n.lower()
     if key in KNOWN:
         add(KNOWN[key])
+    # single-token last name (e.g. "Erigaisi")
+    for part in re.findall(r"[A-Za-z]{3,}", n):
+        if part.lower() in KNOWN:
+            add(KNOWN[part.lower()])
+    for t in ("GM ", "IM ", "FM ", "WGM ", "WIM ", "CM ", "WCM "):
+        if n.upper().startswith(t.strip() + " ") or n.startswith(t):
+            n2 = n[len(t) :].strip()
+            if n2.lower() in KNOWN:
+                add(KNOWN[n2.lower()])
+            n = n2
+            break
     if "," in n:
         a, b = [p.strip() for p in n.split(",", 1)]
         fl = f"{b} {a}".strip()
         if fl.lower() in KNOWN:
             add(KNOWN[fl.lower()])
         add("".join(fl.split()))
-    parts = re.sub(r"[^A-Za-z0-9 ]", "", n).split()
+        fl2 = fl.replace("-", " ")
+        if fl2.lower() in KNOWN:
+            add(KNOWN[fl2.lower()])
+    parts = re.sub(r"[^A-Za-z0-9 \-]", "", n).replace("-", " ").split()
     if parts:
         add("".join(parts))
         if len(parts) >= 2:
             add(parts[-1] + parts[0])
+            add(parts[0] + parts[-1])
+            # "Erigaisi Arjun" → also try joined lower known
+            joined = " ".join(parts).lower()
+            if joined in KNOWN:
+                add(KNOWN[joined])
     return out
 
-def _fetch(username: str) -> Optional[dict]:
+
+def _fetch(username: str):
     url = f"https://api.chess.com/pub/player/{username}"
     req = urllib.request.Request(url, headers={"User-Agent": "Chess64/2.1"})
     try:
@@ -67,6 +111,7 @@ def _fetch(username: str) -> Optional[dict]:
     except Exception:
         return None
 
+
 def resolve_player_assets(display_name: str) -> Tuple[Optional[str], Optional[str]]:
     players = SCRIPT_DIR / "players"
     flags = SCRIPT_DIR / "flags"
@@ -74,12 +119,13 @@ def resolve_player_assets(display_name: str) -> Tuple[Optional[str], Optional[st
     flags.mkdir(exist_ok=True)
 
     want = set(re.findall(r"[a-z]{3,}", (display_name or "").lower()))
+    want -= {"the", "and", "von", "van"}
     profile, used = None, None
     for cand in _candidates(display_name):
         prof = _fetch(cand)
         if not prof or not prof.get("avatar"):
             continue
-        if cand in KNOWN.values():
+        if cand in KNOWN.values() or cand.upper() in {v.upper() for v in KNOWN.values()}:
             profile, used = prof, cand
             break
         got = set(re.findall(r"[a-z]{3,}", (prof.get("name") or "").lower()))
@@ -87,6 +133,7 @@ def resolve_player_assets(display_name: str) -> Tuple[Optional[str], Optional[st
             profile, used = prof, cand
             break
     if not profile:
+        print(f"  no photo match for: {display_name!r} cands={_candidates(display_name)}")
         return None, None
 
     photo = flag = None
@@ -100,8 +147,9 @@ def resolve_player_assets(display_name: str) -> Tuple[Optional[str], Optional[st
                 dest.write_bytes(r.read())
             if dest.stat().st_size > 500:
                 photo = str(dest)
+                print(f"  avatar ok: {display_name} → {used}")
         except Exception as e:
-            print(f"avatar fail {display_name}: {e}")
+            print(f"  avatar fail {display_name}: {e}")
 
     country = (profile.get("country") or "").rstrip("/").split("/")[-1].lower()
     if len(country) == 2:
