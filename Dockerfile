@@ -26,6 +26,9 @@ RUN if [ -f chess64_final_bundle.zip ]; then \
       rm -f chess64_final_bundle.zip; \
     fi
 
+# Local PGN names (Last, First) → Chess.com avatar + flag
+RUN if [ -f apply_player_fix.py ]; then python3 apply_player_fix.py; fi
+
 RUN if [ -f webapp/_parts/assemble.sh ]; then sh webapp/_parts/assemble.sh; fi
 RUN touch webapp/__init__.py
 
