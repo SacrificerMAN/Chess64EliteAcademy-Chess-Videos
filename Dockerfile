@@ -5,6 +5,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     shared-mime-info fonts-dejavu-core curl unzip \
     && rm -rf /var/lib/apt/lists/*
 
+# Stockfish binary
+RUN curl -fsSL "https://github.com/official-stockfish/Stockfish/releases/download/sf_16/stockfish-ubuntu-x86-64.tar" -o /tmp/sf.tar \
+ && tar xf /tmp/sf.tar -C /tmp \
+ && cp /tmp/stockfish/stockfish-ubuntu-x86-64 /usr/local/bin/stockfish \
+ && chmod +x /usr/local/bin/stockfish \
+ && rm -rf /tmp/sf.tar /tmp/stockfish \
+ && stockfish quit || true
+
 WORKDIR /app
 COPY . .
 
@@ -27,6 +35,7 @@ RUN chmod +x wire_photo_fix.sh && sh wire_photo_fix.sh || true
 RUN pip install --no-cache-dir -r requirements_chess_agent_v2.txt \
  && rm -rf /root/.cache/pip /tmp/*
 
+ENV STOCKFISH_PATH=/usr/local/bin/stockfish
 ENV PYTHONUNBUFFERED=1
 ENV PORT=8080
 EXPOSE 8080
