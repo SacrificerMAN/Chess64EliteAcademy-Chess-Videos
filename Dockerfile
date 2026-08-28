@@ -20,26 +20,29 @@ RUN curl -sL "https://github.com/official-stockfish/Stockfish/releases/download/
     && rm -rf /tmp/sf.tar /tmp/stockfish
 
 WORKDIR /app
-
-# Copy everything from repo
 COPY . .
 
-# If only zip was uploaded, extract full source over /app
+# Extract bundle for agent/traps/sounds; keep repo webapp if present
 RUN if [ -f chess64_final_bundle.zip ]; then \
-      unzip -o chess64_final_bundle.zip -d /app && \
+      unzip -o chess64_final_bundle.zip -d /tmp/bundle && \
+      for f in chess_video_agent_v2.py chess_telegram_bot_v2.py youtube_uploader.py watch_folder.py \
+               chess_agent_config.json requirements_chess_agent_v2.txt \
+               chess_move_self.mp3 chess_capture.mp3 chess_move_check.mp3; do \
+        if [ -f /tmp/bundle/$f ]; then cp -f /tmp/bundle/$f /app/$f; fi; \
+      done && \
+      if [ -d /tmp/bundle/traps ]; then cp -rf /tmp/bundle/traps /app/; fi && \
+      if [ ! -f /app/webapp/app.py ] && [ -d /tmp/bundle/webapp ]; then cp -rf /tmp/bundle/webapp /app/; fi && \
       rm -f chess64_final_bundle.zip; \
     fi
 
-# Prefer requirements from extracted tree
 RUN if [ -f requirements_chess_agent_v2.txt ]; then \
       pip install --no-cache-dir -r requirements_chess_agent_v2.txt; \
     else \
-      pip install --no-cache-dir fastapi uvicorn[standard] python-multipart chess cairosvg moviepy pillow edge-tts numpy; \
+      pip install --no-cache-dir fastapi "uvicorn[standard]" python-multipart chess cairosvg moviepy pillow edge-tts numpy; \
     fi
 
 ENV STOCKFISH_PATH=/usr/local/bin/stockfish
 ENV PYTHONUNBUFFERED=1
 ENV PORT=8080
-
 EXPOSE 8080
 CMD ["uvicorn", "webapp.app:app", "--host", "0.0.0.0", "--port", "8080"]
