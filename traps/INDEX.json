@@ -1,0 +1,92 @@
+{
+  "legals_mate": {
+    "name": "Legal's Mate",
+    "elo": "600-1400",
+    "side": "white",
+    "moves": 7,
+    "tags": ["legalsmate", "philidor", "queensac"],
+    "has_refutation": true,
+    "titles": ["Legal's Mate Queen Sacrifice", "Mate in 7 After Queen Sac", "This Pin is Fake", "Legal Trap Still Hits", "Bishop + Two Knights = Mate"]
+  },
+  "stafford": {
+    "name": "Stafford Gambit",
+    "elo": "800-1600",
+    "side": "black",
+    "moves": 8,
+    "tags": ["stafford", "petrov", "ericrosen"],
+    "has_refutation": true,
+    "titles": ["Stafford Gambit Still Works in 2026", "This Trap Breaks 1500s", "Stafford in 8 Moves", "Don't Take the Knight…", "Eric Rosen Style Trap"]
+  },
+  "fried_liver": {
+    "name": "Fried Liver Attack",
+    "elo": "800-1500",
+    "side": "white",
+    "moves": 11,
+    "tags": ["friedliver", "italian", "two knights"],
+    "has_refutation": true,
+    "titles": ["Fried Liver Attack Explained", "Punish Nxd5 Instantly", "Italian Trap Everyone Plays", "King Walk After Nxf7", "Fried Liver Still Cooks"]
+  },
+  "scholars_mate": {
+    "name": "Scholar's Mate",
+    "elo": "0-800",
+    "side": "white",
+    "moves": 4,
+    "tags": ["scholarsmate", "beginner"],
+    "has_refutation": true,
+    "titles": ["Scholar's Mate in 4 Moves", "Beginner Trap #1", "Don't Fall for Qh5", "Fastest Common Mate", "Stop Scholar's Mate"]
+  },
+  "blackburne_shilling": {
+    "name": "Blackburne Shilling",
+    "elo": "600-1200",
+    "side": "black",
+    "moves": 7,
+    "tags": ["blackburne", "italian"],
+    "has_refutation": true,
+    "titles": ["Blackburne Shilling Trap", "Nd4 Trick in Italian", "Free Piece? Think Again", "Shilling Gambit Mate", "Italian Game Trap"]
+  },
+  "englund": {
+    "name": "Englund Gambit Trap",
+    "elo": "600-1400",
+    "side": "black",
+    "moves": 8,
+    "tags": ["englund", "d4"],
+    "has_refutation": true,
+    "titles": ["Englund Gambit Queen Trap", "d4 Players Fall For This", "Englund Still Works", "Early Queen Raid", "Don't Grab on b2"]
+  },
+  "lasker_trap": {
+    "name": "Lasker Trap",
+    "elo": "1000-1800",
+    "side": "black",
+    "moves": 8,
+    "tags": ["lasker", "albin", "underpromotion"],
+    "has_refutation": true,
+    "titles": ["Lasker Trap Underpromotion", "Promote to Knight?!", "Albin Countergambit Trap", "fxg1=N+ Shock", "Lasker Still Nasty"]
+  },
+  "fishing_pole": {
+    "name": "Fishing Pole",
+    "elo": "800-1500",
+    "side": "black",
+    "moves": 9,
+    "tags": ["fishingpole", "ruylopez"],
+    "has_refutation": true,
+    "titles": ["Fishing Pole Trap", "h5 After Ng4", "Ruy Lopez Hook", "Open the H-File", "Fishing Pole Mate"]
+  },
+  "icbm": {
+    "name": "ICBM Style Trap",
+    "elo": "400-1000",
+    "side": "white",
+    "moves": 11,
+    "tags": ["icbm", "meme", "viral"],
+    "has_refutation": true,
+    "titles": ["ICBM Chess Trap", "Viral Opening Test 2026", "Early Queen Adventures", "ICBM Still Lands", "Meme Trap That Hits"]
+  },
+  "danish": {
+    "name": "Danish Gambit",
+    "elo": "800-1600",
+    "side": "white",
+    "moves": 12,
+    "tags": ["danish", "gambit"],
+    "has_refutation": true,
+    "titles": ["Danish Gambit Attack", "Sacrifice for Development", "Danish Crush Below 1600", "Open Lines Fast", "Gambit That Punishes Greed"]
+  }
+}
