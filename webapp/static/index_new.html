@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Chess64 Video Tool</title>
+<style>
+:root{--bg:#0f1419;--card:#1a2332;--line:#2a3548;--text:#e7ecf3;--muted:#8b9bb4;--accent:#e74c3c;--ok:#2ecc71;--err:#e74c3c}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.5;padding:24px}
+.wrap{max-width:720px;margin:0 auto}
+header{margin-bottom:24px}
+h1{font-size:1.5rem;font-weight:700}
+header p{color:var(--muted);font-size:.9rem;margin-top:4px}
+.badge{display:inline-block;background:var(--line);color:var(--muted);font-size:.75rem;padding:2px 8px;border-radius:999px;margin-top:8px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:16px}
+.card h3{font-size:.95rem;margin-bottom:12px;color:#c5d0e0}
+label{display:block;font-size:.8rem;color:var(--muted);margin-bottom:4px}
+input,select,textarea{width:100%;background:#0d1218;border:1px solid var(--line);border-radius:8px;color:var(--text);padding:10px 12px;font-size:.9rem}
+textarea{min-height:100px;font-family:ui-monospace,monospace;resize:vertical}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.hint{font-size:.75rem;color:var(--muted);margin-top:6px}
+.checks{margin-top:10px}
+.checks label{display:flex;align-items:center;gap:8px;color:var(--text);font-size:.85rem;cursor:pointer}
+.checks input{width:auto}
+.seg{display:flex;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{flex:1;background:transparent;border:none;color:var(--muted);padding:10px;cursor:pointer;font-size:.85rem}
+.seg button.active{background:var(--accent);color:#fff}
+.btn{display:block;width:100%;background:var(--accent);color:#fff;border:none;border-radius:10px;padding:14px;font-size:1rem;font-weight:600;cursor:pointer;margin-top:8px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-secondary{background:var(--line);color:var(--text);width:auto;padding:10px 16px;font-size:.85rem;margin-top:0}
+#status{margin-top:12px;font-size:.9rem;min-height:1.4em}
+.ok{color:var(--ok)}.err{color:var(--err)}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:s .7s linear infinite;margin-right:6px;vertical-align:middle}
+@keyframes s{to{transform:rotate(360deg)}}
+.meta{margin-top:16px}
+.meta a{color:#6cb6ff}
+@media(max-width:600px){.row,.row3{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Chess64 Video Tool</h1>
+    <p>Full pipeline — local PGN, traps, Chess.com / Lichess, silent + commentary</p>
+    <span class="badge">Chess64EliteAcademy · v2.2</span>
+  </header>
+
+  <div class="card">
+    <h3>1 · Source</h3>
+    <label for="pgn">Local game — paste PGN</label>
+    <textarea id="pgn" placeholder='[Event "My Game"]&#10;1. e4 e5 2. Nf3 ...'></textarea>
+    <p class="hint">Offline / local tournament games yahan paste karo.</p>
+    <div style="margin-top:12px">
+      <label for="file">Ya .pgn file upload</label>
+      <input type="file" id="file" accept=".pgn,.txt,text/plain" />
+    </div>
+    <div class="checks" style="margin-top:12px">
+      <label><input type="checkbox" id="usePhotos" checked /> Player photos + country flags (Chess.com)</label>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>2 · Trap library</h3>
+    <div class="row">
+      <div>
+        <label for="trap">Trap</label>
+        <select id="trap"><option value="">— none (use PGN / player) —</option></select>
+      </div>
+      <div>
+        <label>&nbsp;</label>
+        <button type="button" class="btn btn-secondary" id="todBtn">Use Trap of the Day</button>
+      </div>
+    </div>
+    <p class="hint" id="todHint"></p>
+    <div class="checks">
+      <label><input type="checkbox" id="refutation" checked /> Include refutation branch</label>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>3 · Online / tournament game fetch</h3>
+    <div class="row">
+      <div>
+        <label for="player">Player name (Chess.com / Lichess / FIDE style)</label>
+        <input type="text" id="player" placeholder="e.g. Hikaru or MagnusCarlsen" />
+      </div>
+      <div>
+        <label for="source">Source</label>
+        <select id="source">
+          <option value="chesscom">Chess.com online</option>
+          <option value="lichess">Lichess online</option>
+          <option value="tournament">Offline / FIDE-style (OTB prefer)</option>
+        </select>
+      </div>
+    </div>
+    <p class="hint">Player name → <b>Load top 10</b> → game choose. Tournament = OTB/FIDE first.</p>
+    <div class="row" style="margin-top:12px">
+      <div>
+        <button type="button" class="btn btn-secondary" id="loadGamesBtn">Load top 10 recent games</button>
+      </div>
+    </div>
+    <div id="gamesPickerWrap" style="display:none;margin-top:12px">
+      <label for="gamePick">Select game</label>
+      <select id="gamePick"></select>
+      <p class="hint" id="gamePickHint"></p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>4 · Mode & voice</h3>
+    <div class="seg" id="modeSeg">
+      <button type="button" class="active" data-mode="silent">Silent (board + sounds)</button>
+      <button type="button" data-mode="commentary">Commentary (energetic TTS)</button>
+    </div>
+    <input type="hidden" id="mode" value="silent" />
+    <div class="row" style="margin-top:12px">
+      <div>
+        <label for="lang">Commentary language</label>
+        <select id="lang">
+          <option value="en">English (American accent)</option>
+          <option value="hi">Hindi</option>
+        </select>
+      </div>
+      <div>
+        <label for="viralHook">Viral hook text (optional)</label>
+        <input type="text" id="viralHook" placeholder="QUEEN SAC STILL WORKS" />
+      </div>
+    </div>
+    <div class="checks">
+      <label><input type="checkbox" id="gemini" /> Use Gemini for commentary + SEO (needs GEMINI_API_KEY)</label>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>5 · Video options</h3>
+    <div class="row3">
+      <div>
+        <label for="duration">Sec / move</label>
+        <input type="number" id="duration" value="3" min="1" max="12" step="0.5" />
+      </div>
+      <div>
+        <label for="clock">Clock badge</label>
+        <input type="text" id="clock" value="10+0" />
+      </div>
+      <div>
+        <label for="maxShorts">Max Shorts (sec)</label>
+        <input type="number" id="maxShorts" value="40" min="15" max="60" />
+      </div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <div>
+        <label for="watermark">Watermark</label>
+        <input type="text" id="watermark" value="@Chess64" />
+      </div>
+      <div>
+        <label>Outputs</label>
+        <div class="checks">
+          <label><input type="checkbox" id="outShorts" /> Shorts</label>
+          <label><input type="checkbox" id="outReels" /> Reels 9:16</label>
+          <label><input type="checkbox" id="outThumbs" checked /> Thumbnails</label>
+        </div>
+      </div>
+    </div>
+    <button type="button" class="btn" id="genBtn">Generate Long + Shorts</button>
+    <div id="status"></div>
+    <div class="meta" id="meta"></div>
+  </div>
+</div>
+<script>
+(async function(){
+  try {
+    const r = await fetch("/api/traps");
+    const d = await r.json();
+    const sel = document.getElementById("trap");
+    (d.traps||[]).forEach(t => {
+      const o = document.createElement("option");
+      o.value = t.key || t.id || t;
+      o.textContent = t.name || t.title || t.key || t;
+      sel.appendChild(o);
+    });
+  } catch(e){}
+  document.getElementById("todBtn").onclick = async () => {
+    try {
+      const r = await fetch("/api/traps");
+      const d = await r.json();
+      const t = (d.traps||[])[0];
+      if (t) { document.getElementById("trap").value = t.key||t.id; document.getElementById("todHint").textContent = "Trap of day: "+(t.name||t.key); }
+    } catch(e){}
+  };
+  document.querySelectorAll("#modeSeg button").forEach(b => {
+    b.onclick = () => {
+      document.querySelectorAll("#modeSeg button").forEach(x => x.classList.remove("active"));
+      b.classList.add("active");
+      document.getElementById("mode").value = b.dataset.mode;
+    };
+  });
+
+  document.getElementById("loadGamesBtn").addEventListener("click", async () => {
+    const player = document.getElementById("player").value.trim();
+    const source = document.getElementById("source").value;
+    const status = document.getElementById("status");
+    if (!player) { status.innerHTML = '<span class="err">Player name required</span>'; return; }
+    status.innerHTML = '<span class="spin"></span> Loading top 10 decisive games…';
+    try {
+      const r = await fetch('/api/recent-games?player='+encodeURIComponent(player)+'&source='+encodeURIComponent(source)+'&limit=10');
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.detail || 'fetch failed');
+      const sel = document.getElementById("gamePick");
+      sel.innerHTML = "";
+      window.__recentGames = data.games || [];
+      if (!window.__recentGames.length) {
+        status.innerHTML = '<span class="err">No decisive games found</span>';
+        document.getElementById("gamesPickerWrap").style.display = "none";
+        return;
+      }
+      window.__recentGames.forEach((g, i) => {
+        const otb = g.is_otb ? "OTB" : "online";
+        const opt = document.createElement("option");
+        opt.value = String(i);
+        opt.textContent = (i+1)+". "+g.white+" vs "+g.black+"  "+g.result+" · "+(g.event||"")+" · "+(g.time_class||"")+" ["+otb+"]";
+        sel.appendChild(opt);
+      });
+      document.getElementById("gamesPickerWrap").style.display = "block";
+      document.getElementById("pgn").value = window.__recentGames[0].pgn || "";
+      document.getElementById("gamePickHint").textContent = data.count+" games · select one · photos+flags on generate";
+      status.innerHTML = '<span class="ok">Loaded '+data.count+' games — select & Generate</span>';
+    } catch (e) {
+      status.innerHTML = '<span class="err">'+(e.message||e)+'</span>';
+    }
+  });
+  document.getElementById("gamePick").addEventListener("change", (e) => {
+    const i = parseInt(e.target.value, 10);
+    if (window.__recentGames && window.__recentGames[i]) {
+      document.getElementById("pgn").value = window.__recentGames[i].pgn || "";
+    }
+  });
+
+  document.getElementById("genBtn").onclick = async () => {
+    const fd = new FormData();
+    const pgn = document.getElementById("pgn").value.trim();
+    const file = document.getElementById("file").files[0];
+    const player = document.getElementById("player").value.trim();
+    const trap = document.getElementById("trap").value;
+    if (pgn) fd.append("pgn", pgn);
+    if (file) fd.append("file", file);
+    if (player) fd.append("player", player);
+    if (trap) fd.append("trap", trap);
+    fd.append("source", document.getElementById("source").value);
+    fd.append("mode", document.getElementById("mode").value);
+    fd.append("lang", document.getElementById("lang").value);
+    fd.append("viral_hook", document.getElementById("viralHook").value);
+    fd.append("use_gemini", document.getElementById("gemini").checked ? "1" : "0");
+    fd.append("refutation", document.getElementById("refutation").checked ? "1" : "0");
+    fd.append("duration", document.getElementById("duration").value);
+    fd.append("clock", document.getElementById("clock").value);
+    fd.append("max_shorts", document.getElementById("maxShorts").value);
+    fd.append("watermark", document.getElementById("watermark").value);
+    fd.append("out_shorts", document.getElementById("outShorts").checked ? "1" : "0");
+    fd.append("out_reels", document.getElementById("outReels").checked ? "1" : "0");
+    fd.append("out_thumbs", document.getElementById("outThumbs").checked ? "1" : "0");
+    if (!pgn && !trap && !file && !player) {
+      document.getElementById("status").innerHTML = '<span class="err">PGN, file, trap, or player required</span>';
+      return;
+    }
+    const btn = document.getElementById("genBtn");
+    btn.disabled = true;
+    document.getElementById("status").innerHTML = '<span class="spin"></span> Starting…';
+    document.getElementById("meta").innerHTML = "";
+    try {
+      const r = await fetch("/api/generate", { method: "POST", body: fd });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || "generate failed");
+      const job = d.job_id;
+      const poll = async () => {
+        const s = await fetch("/api/status/"+job);
+        const st = await s.json();
+        document.getElementById("status").innerHTML = st.status==="done"
+          ? '<span class="ok">Done</span>'
+          : st.status==="error"
+            ? '<span class="err">'+(st.error||"error")+'</span>'
+            : '<span class="spin"></span> '+(st.progress||st.status)+' '+(st.percent||"")+'%';
+        if (st.status==="done") {
+          let links = "";
+          (st.outputs||[]).forEach(o => {
+            links += '<div><a href="/api/download/'+job+'/'+encodeURIComponent(o.name||o)+'" target="_blank">'+(o.name||o)+'</a></div>';
+          });
+          document.getElementById("meta").innerHTML = links;
+          btn.disabled = false;
+          return;
+        }
+        if (st.status==="error") { btn.disabled = false; return; }
+        setTimeout(poll, 2000);
+      };
+      poll();
+    } catch (e) {
+      document.getElementById("status").innerHTML = '<span class="err">'+(e.message||e)+'</span>';
+      btn.disabled = false;
+    }
+  };
+})();
+</script>
+</body>
+</html>
