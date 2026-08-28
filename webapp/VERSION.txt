@@ -1,2 +1,2 @@
-2.0-full-features
-silent|commentary|player-fetch|refutation|seo-meta
+2.1.1-player-photo-fix
+so,wesley→GMWSO | force-refresh known GM avatars
