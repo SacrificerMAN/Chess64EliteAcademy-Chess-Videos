@@ -22,7 +22,7 @@ RUN if [ -f chess64_final_bundle.zip ]; then \
                chess_move_self.mp3 chess_capture.mp3 chess_move_check.mp3; do \
         [ -f /tmp/bundle/$f ] && cp -f /tmp/bundle/$f /app/; \
       done && \
-      if [ ! -f /app/chess_telegram_bot_v2.py ] && [ -f /tmp/bundle/chess_telegram_bot_v2.py ]; then \
+      if [ -f /tmp/bundle/chess_telegram_bot_v2.py ]; then \
         cp -f /tmp/bundle/chess_telegram_bot_v2.py /app/; \
       fi && \
       [ -d /tmp/bundle/traps ] && cp -rf /tmp/bundle/traps /app/; \
@@ -31,6 +31,7 @@ RUN if [ -f chess64_final_bundle.zip ]; then \
 
 RUN python3 apply_player_fix.py || true
 RUN python3 expand_known.py || true
+RUN python3 patch_bot_stability.py || true
 RUN sh webapp/_parts/assemble.sh || true
 RUN touch webapp/__init__.py
 RUN chmod +x wire_photo_fix.sh start.sh && sh wire_photo_fix.sh || true
