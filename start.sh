@@ -1,34 +1,45 @@
 #!/bin/sh
 cd /app
 
-write_b64() {
-  val="$1"
-  out="$2"
-  label="$3"
-  if [ -z "$val" ]; then
-    return 0
-  fi
-  case "$val" in
-    *base64*|*pehla*|*doosra*|*xxxx*)
-      echo "WARN: $label looks like placeholder — skipped"
-      return 0
-      ;;
-  esac
-  if echo "$val" | base64 -d > "$out" 2>/dev/null; then
+write_json_or_b64() {
+  json_val="$1"
+  b64_val="$2"
+  out="$3"
+  label="$4"
+
+  if [ -n "$json_val" ]; then
+    printf '%s' "$json_val" > "$out"
     if head -c 1 "$out" | grep -q '{'; then
-      echo "OK: wrote $out from $label ($(wc -c < "$out") bytes)"
+      echo "OK: wrote $out from ${label}_JSON ($(wc -c < "$out") bytes)"
+      return 0
+    fi
+    echo "WARN: ${label}_JSON does not look like JSON"
+    rm -f "$out"
+  fi
+
+  if [ -n "$b64_val" ]; then
+    case "$b64_val" in
+      *pehla*|*doosra*|*xxxx*|*placeholder*)
+        echo "WARN: ${label}_B64 is placeholder — skipped"
+        return 0
+        ;;
+    esac
+    if echo "$b64_val" | tr -d '\n\r ' | base64 -d > "$out" 2>/dev/null; then
+      if head -c 1 "$out" | grep -q '{'; then
+        echo "OK: wrote $out from ${label}_B64 ($(wc -c < "$out") bytes)"
+        return 0
+      fi
+      echo "WARN: ${label}_B64 decoded but not JSON"
+      rm -f "$out"
     else
-      echo "WARN: $label decoded but not JSON — removed"
+      echo "WARN: ${label}_B64 invalid base64 — skipped"
       rm -f "$out"
     fi
-  else
-    echo "WARN: $label invalid base64 — skipped"
-    rm -f "$out"
   fi
 }
 
-write_b64 "$CLIENT_SECRETS_B64" /app/client_secrets.json CLIENT_SECRETS_B64
-write_b64 "$YOUTUBE_TOKEN_B64" /app/token.json YOUTUBE_TOKEN_B64
+write_json_or_b64 "$CLIENT_SECRETS_JSON" "$CLIENT_SECRETS_B64" /app/client_secrets.json CLIENT_SECRETS
+write_json_or_b64 "$YOUTUBE_TOKEN_JSON" "$YOUTUBE_TOKEN_B64" /app/token.json YOUTUBE_TOKEN
 
 export YOUTUBE_CLIENT_SECRETS=/app/client_secrets.json
 export YOUTUBE_TOKEN=/app/token.json
@@ -36,12 +47,12 @@ export YOUTUBE_TOKEN=/app/token.json
 if [ -f /app/client_secrets.json ]; then
   echo "YouTube client_secrets.json ready"
 else
-  echo "NOTE: no client_secrets.json — set CLIENT_SECRETS_B64 to base64 of the OAuth JSON file"
+  echo "NOTE: client_secrets.json MISSING — set CLIENT_SECRETS_JSON or CLIENT_SECRETS_B64"
 fi
 if [ -f /app/token.json ]; then
   echo "YouTube token.json ready"
 else
-  echo "NOTE: no token.json — OAuth once locally, then set YOUTUBE_TOKEN_B64"
+  echo "NOTE: token.json MISSING — set YOUTUBE_TOKEN_JSON or YOUTUBE_TOKEN_B64"
 fi
 
 if [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -f chess_telegram_bot_v2.py ]; then
