@@ -1,6 +1,18 @@
 #!/bin/sh
 cd /app
 
+# Chess64 brand logo from Railway env BRAND_LOGO_B64
+if [ -n "$BRAND_LOGO_B64" ]; then
+  if printf '%s' "$BRAND_LOGO_B64" | tr -d '\n\r\t ' | base64 -d > /app/brand_logo.png 2>/dev/null; then
+    echo "OK: brand_logo.png from BRAND_LOGO_B64 ($(wc -c < /app/brand_logo.png) bytes)"
+  else
+    echo "WARN: BRAND_LOGO_B64 invalid"
+    rm -f /app/brand_logo.png
+  fi
+elif [ -f /app/brand_logo.b64 ] && [ "$(wc -c < /app/brand_logo.b64)" -gt 100 ]; then
+  base64 -d < /app/brand_logo.b64 > /app/brand_logo.png 2>/dev/null && echo "OK: brand_logo.png from file" || true
+fi
+
 try_write_cred() {
   out="$1"
   label="$2"
@@ -41,7 +53,6 @@ then
   :
 else
   echo "FAIL: client_secrets.json not created"
-  echo "  Set CLIENT_SECRETS_JSON = full text of client_secrets.json (must start with {)"
 fi
 
 if try_write_cred /app/token.json YOUTUBE_TOKEN \
@@ -52,12 +63,11 @@ then
   :
 else
   echo "FAIL: token.json not created"
-  echo "  Set YOUTUBE_TOKEN_JSON = full text of token.json after local OAuth"
 fi
 
 export YOUTUBE_CLIENT_SECRETS=/app/client_secrets.json
 export YOUTUBE_TOKEN=/app/token.json
-ls -la /app/client_secrets.json /app/token.json 2>&1 || true
+ls -la /app/client_secrets.json /app/token.json /app/brand_logo.png 2>&1 || true
 
 if [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -f chess_telegram_bot_v2.py ]; then
   echo "Starting Telegram bot..."
