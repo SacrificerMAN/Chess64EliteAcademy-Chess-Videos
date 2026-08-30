@@ -1,13 +1,15 @@
-"""Install brand_logo.png and overlay it on every video frame. SEO/title/hashtags unchanged."""
+"""Install brand_logo.png and ensure overlay; SEO/title/hashtags/description unchanged."""
 from pathlib import Path
 import base64
 
 logo = Path("brand_logo.png")
 parts_dir = Path("brand_logo_parts")
-if not logo.exists() and parts_dir.exists():
-    data = "".join((parts_dir / f).read_text() for f in sorted(parts_dir.glob("L*")))
-    logo.write_bytes(base64.b64decode(data))
-    print(f"assembled brand_logo.png ({logo.stat().st_size} bytes)")
+if parts_dir.exists():
+    files = sorted(parts_dir.glob("L*"))
+    if files:
+        data = "".join(f.read_text().strip() for f in files)
+        logo.write_bytes(base64.b64decode(data))
+        print(f"assembled brand_logo.png ({logo.stat().st_size} bytes)")
 elif logo.exists():
     print(f"brand_logo.png present ({logo.stat().st_size} bytes)")
 else:
@@ -17,13 +19,9 @@ agent = Path("chess_video_agent_v2.py")
 if not agent.exists():
     raise SystemExit(0)
 t = agent.read_text()
-if "def apply_brand_logo" in t:
-    print("brand overlay already in agent")
-    raise SystemExit(0)
-
-fn = '''
+if "def apply_brand_logo" not in t:
+    fn = '''
 def apply_brand_logo(img: "Image.Image", corner: str = "br", max_h: int = 72) -> "Image.Image":
-    """Paste Chess64 Elite Academy logo on frame."""
     from PIL import Image as PILImage
     logo_path = SCRIPT_DIR / "brand_logo.png"
     if not logo_path.exists():
@@ -34,7 +32,7 @@ def apply_brand_logo(img: "Image.Image", corner: str = "br", max_h: int = 72) ->
         h = max_h
         w = int(logo.width * (h / max(logo.height, 1)))
         logo = logo.resize((max(w, 1), max(h, 1)), PILImage.Resampling.LANCZOS)
-        alpha = logo.split()[-1].point(lambda p: int(p * 0.85))
+        alpha = logo.split()[-1].point(lambda p: int(p * 0.9))
         logo.putalpha(alpha)
         margin = 10
         if corner == "br":
@@ -52,20 +50,13 @@ def apply_brand_logo(img: "Image.Image", corner: str = "br", max_h: int = 72) ->
         return img
 
 '''
-anchor = 'def apply_watermark(img: "Image.Image", text: str = "@YourChannel") -> "Image.Image":'
-if anchor not in t:
-    print("no apply_watermark")
-    raise SystemExit(0)
-t = t.replace(anchor, fn + "\n" + anchor, 1)
-old = '''    draw.text((x, y), text, font=f, fill=(255, 255, 255, 160))
-    return PILImage.alpha_composite(base, overlay).convert("RGB")
-'''
-new = '''    draw.text((x, y), text, font=f, fill=(255, 255, 255, 160))
-    out = PILImage.alpha_composite(base, overlay).convert("RGB")
-    return apply_brand_logo(out, corner="br", max_h=max(56, base.height // 14))
-'''
-if old in t:
-    t = t.replace(old, new, 1)
+    anchor = 'def apply_watermark(img: "Image.Image", text: str = "@YourChannel") -> "Image.Image":'
+    if anchor in t:
+        t = t.replace(anchor, fn + "\n" + anchor, 1)
+        agent.write_text(t)
+        print("inserted apply_brand_logo")
+
+t = agent.read_text()
 old_if = '''    if watermark:
         img = apply_watermark(img.convert("RGB"), watermark)
     else:
@@ -78,5 +69,6 @@ new_if = '''    if watermark:
 '''
 if old_if in t:
     t = t.replace(old_if, new_if)
-agent.write_text(t)
-print("brand logo overlay patched into agent")
+    agent.write_text(t)
+    print("wired logo into frames")
+print("brand logo patch done (metadata/SEO pipeline untouched)")
