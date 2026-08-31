@@ -1,15 +1,14 @@
-"""Add /setwhiteflag /setblackflag ISO codes + wire into video render."""
+"""Force /setwhiteflag /setblackflag + help text + render override."""
 from pathlib import Path
+import re
 
 p = Path("chess_telegram_bot_v2.py")
 if not p.exists():
     raise SystemExit(0)
 t = p.read_text()
-if "cmd_setwhiteflag" in t and "MANUAL WHITE flag" in t:
-    print("flags already present")
-    raise SystemExit(0)
 
-helper = '''
+if "_flag_path_for_code" not in t:
+    helper = '''
 def _flag_path_for_code(code: str):
     code = (code or "").strip().lower()
     if len(code) != 2 or not code.isalpha():
@@ -33,14 +32,22 @@ def _flag_path_for_code(code: str):
 
 
 '''
+    if "async def cmd_setwhite" in t:
+        t = t.replace("async def cmd_setwhite", helper + "async def cmd_setwhite", 1)
+    elif "\ndef main():" in t:
+        t = t.replace("\ndef main():", "\n" + helper + "\ndef main():", 1)
+    else:
+        t = helper + t
+    print("helper inserted")
 
-flag_cmds = '''
+if "cmd_setwhiteflag" not in t:
+    cmds = '''
 async def cmd_setwhiteflag(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not _allowed(update.effective_user.id):
         return
     code = (context.args[0] if context.args else "").strip().upper()
     if len(code) != 2:
-        await update.message.reply_text("Usage: /setwhiteflag IR\\nExamples: IR US IN NO RU CN FR DE PL CA")
+        await update.message.reply_text("Usage: /setwhiteflag IR  (examples: IR US IN NO RU CN FR DE PL CA)")
         return
     path = _flag_path_for_code(code)
     if not path:
@@ -55,7 +62,7 @@ async def cmd_setblackflag(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     code = (context.args[0] if context.args else "").strip().upper()
     if len(code) != 2:
-        await update.message.reply_text("Usage: /setblackflag US\\nExamples: IR US IN NO RU CN FR DE PL CA")
+        await update.message.reply_text("Usage: /setblackflag US  (examples: IR US IN NO RU CN FR DE PL CA)")
         return
     path = _flag_path_for_code(code)
     if not path:
@@ -66,56 +73,42 @@ async def cmd_setblackflag(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 '''
-
-if "_flag_path_for_code" not in t:
-    if "async def cmd_setwhite" in t:
-        t = t.replace("async def cmd_setwhite", helper + "async def cmd_setwhite", 1)
-    else:
-        t = t.replace("\\ndef main():", helper + "\\ndef main():", 1)
-
-if "cmd_setwhiteflag" not in t:
     if "async def cmd_clearphotos" in t:
-        t = t.replace("async def cmd_clearphotos", flag_cmds + "async def cmd_clearphotos", 1)
-    elif "\\ndef main():" in t:
-        t = t.replace("\\ndef main():", flag_cmds + "\\ndef main():", 1)
+        t = t.replace("async def cmd_clearphotos", cmds + "async def cmd_clearphotos", 1)
+    elif "\ndef main():" in t:
+        t = t.replace("\ndef main():", cmds + "\ndef main():", 1)
+    print("flag commands inserted")
 
 t = t.replace(
     'for k in ("custom_white_photo", "custom_black_photo"):',
     'for k in ("custom_white_photo", "custom_black_photo", "custom_white_flag", "custom_black_flag"):',
 )
 
-if "MANUAL WHITE flag" not in t:
-    old = (
-        "        if cb and Path(cb).exists() and Path(cb).stat().st_size > 200:\\n"
-        "            bp = cb\\n"
-        '            print(f"  MANUAL BLACK photo: {cb}")\\n'
-    )
-    # try without double escapes - actual file newlines
-    old = (
-        "        if cb and Path(cb).exists() and Path(cb).stat().st_size > 200:\n"
-        "            bp = cb\n"
-        '            print(f"  MANUAL BLACK photo: {cb}")\n'
-    )
-    new = old + (
+if 'get("custom_white_flag")' not in t:
+    block = (
         '        cwf = context.user_data.get("custom_white_flag")\n'
         '        cbf = context.user_data.get("custom_black_flag")\n'
-        "        if cwf and Path(cwf).exists():\n"
-        "            wf = cwf\n"
+        '        if cwf and Path(cwf).exists():\n'
+        '            wf = cwf\n'
         '            print(f"  MANUAL WHITE flag: {cwf}")\n'
-        "        if cbf and Path(cbf).exists():\n"
-        "            bf = cbf\n"
+        '        if cbf and Path(cbf).exists():\n'
+        '            bf = cbf\n'
         '            print(f"  MANUAL BLACK flag: {cbf}")\n'
     )
-    if old in t:
-        t = t.replace(old, new, 1)
-        print("flag override wired")
-    else:
-        print("WARN: photo override block not found")
+    for m in [
+        '            print(f"  MANUAL BLACK photo: {cb}")\n',
+        '            bp = cb\n',
+    ]:
+        if m in t:
+            t = t.replace(m, m + block, 1)
+            print("flag override injected")
+            break
 
 if 'CommandHandler("setwhiteflag"' not in t:
     for needle in [
         'app.add_handler(CommandHandler("setblack", cmd_setblack))',
         'app.add_handler(CommandHandler("clearphotos", cmd_clearphotos))',
+        'app.add_handler(CommandHandler("setwhite", cmd_setwhite))',
         'app.add_handler(CommandHandler("cancel", cancel))',
     ]:
         if needle in t:
@@ -130,12 +123,47 @@ if 'CommandHandler("setwhiteflag"' not in t:
             break
 
 if "/setwhiteflag" not in t:
-    t = t.replace(
-        "/clearphotos  remove custom faces",
-        "/setwhiteflag IR  /setblackflag US\\n/clearphotos  remove custom faces+flags",
-        1,
+    for old_help, new_help in [
+        ("/clearphotos  remove custom faces", "/setwhiteflag IR   /setblackflag US\n/clearphotos  remove custom faces+flags"),
+        ("/clearphotos remove custom faces", "/setwhiteflag IR   /setblackflag US\n/clearphotos remove custom faces+flags"),
+    ]:
+        if old_help in t:
+            t = t.replace(old_help, new_help, 1)
+            print("help line patched")
+            break
+
+if "/setwhiteflag" not in t:
+    safe = '''async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not _allowed(update.effective_user.id):
+        await update.message.reply_text("Access denied.")
+        return
+    text = (
+        "Chess Video Agent Bot\\n\\n"
+        "Online Chess.com:\\n/silent Magnus Carlsen\\n\\n"
+        "Online Lichess:\\n/lichess Magnus Carlsen\\n\\n"
+        "Offline / FIDE-style:\\n/offline Magnus Carlsen\\n\\n"
+        "Custom PGN: send .pgn file or /pgn then paste\\n\\n"
+        "Photos (manual):\\n"
+        "/setwhite  then send WHITE image\\n"
+        "/setblack  then send BLACK image\\n"
+        "/setwhiteflag IR   /setblackflag US\\n"
+        "/clearphotos  remove custom faces+flags\\n\\n"
+        "After video is ready you choose:\\n"
+        "- Send on Telegram -> manual YouTube upload\\n"
+        "- Upload to YouTube -> direct API\\n\\n"
+        "/trapofday /trap stafford /traps /trend\\n"
+        "/duration 5 /theme green /help"
     )
+    await update.message.reply_text(text)
+
+
+'''
+    m = re.search(r"async def start\(update: Update, context: ContextTypes\.DEFAULT_TYPE\):", t)
+    m2 = re.search(r"\nasync def help_cmd\(", t)
+    if m and m2 and m.start() < m2.start():
+        t = t[: m.start()] + safe + t[m2.start() + 1 :]
+        print("start() rewritten with flags in help")
 
 p.write_text(t)
 compile(t, "chess_telegram_bot_v2.py", "exec")
-print("flags patch OK")
+print("OK setwhiteflag", "/setwhiteflag" in t, "handler", 'CommandHandler("setwhiteflag"' in t)
