@@ -29,6 +29,7 @@ RUN if [ -f chess64_final_bundle.zip ]; then \
       rm -rf /tmp/bundle chess64_final_bundle.zip; \
     fi
 
+RUN python3 install_fix_resolve.py || true
 RUN python3 apply_player_fix.py || true
 RUN python3 expand_known.py || true
 RUN python3 patch_agent_bugs.py || true
