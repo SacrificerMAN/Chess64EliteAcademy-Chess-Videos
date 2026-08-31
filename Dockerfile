@@ -33,6 +33,7 @@ RUN python3 apply_player_fix.py || true
 RUN python3 expand_known.py || true
 RUN python3 patch_agent_bugs.py || true
 RUN python3 patch_brand_logo.py || true
+RUN python3 patch_pro_studio.py || true
 RUN python3 patch_bot_stability.py || true
 RUN sh webapp/_parts/assemble.sh || true
 RUN touch webapp/__init__.py
