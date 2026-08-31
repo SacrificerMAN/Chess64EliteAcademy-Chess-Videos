@@ -132,5 +132,18 @@ if old_paste in t and "gold studio frame" not in t:
     n += 1
     print("gold board frame")
 
+# last-name fix for "Praggnanandhaa R"
+old_ln = '''    w_last = white_name.split()[-1] if white_name else "White"
+    b_last = black_name.split()[-1] if black_name else "Black"'''
+new_ln = '''    def _last(n):
+        parts = [x for x in (n or "").replace(",", " ").split() if len(x) > 1]
+        return parts[-1] if parts else (n or "Player")
+    w_last = _last(white_name)
+    b_last = _last(black_name)'''
+if old_ln in t:
+    t = t.replace(old_ln, new_ln, 1)
+    n += 1
+    print("last-name fix")
+
 agent.write_text(t)
 print(f"patch_pro_studio: {n} changes")
