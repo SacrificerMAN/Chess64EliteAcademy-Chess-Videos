@@ -36,6 +36,7 @@ RUN python3 patch_agent_bugs.py || true
 RUN python3 patch_brand_logo.py || true
 RUN python3 patch_pro_studio.py || true
 RUN python3 patch_bot_stability.py || true
+RUN python3 patch_bot_manual_photos.py || true
 RUN sh webapp/_parts/assemble.sh || true
 RUN touch webapp/__init__.py
 RUN chmod +x wire_photo_fix.sh start.sh && sh wire_photo_fix.sh || true
