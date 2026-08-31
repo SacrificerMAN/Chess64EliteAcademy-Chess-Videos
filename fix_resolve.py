@@ -1,4 +1,4 @@
-"""Chess.com photo/flag resolver — local PGN names (Last, First) + recent games helper."""
+"""Chess.com photo/flag resolver — local PGN names (Last, First) + known GMs."""
 from __future__ import annotations
 import json
 import re
@@ -32,13 +32,11 @@ KNOWN = {
     "gukesh": "GukeshDommaraju",
     "anish giri": "AnishGiri",
     "levon aronian": "LevAronian",
-    # Duda
     "jan-krzysztof duda": "Polish_fighter3000",
     "jan krzysztof duda": "Polish_fighter3000",
     "duda, jan-krzysztof": "Polish_fighter3000",
     "duda, jan krzysztof": "Polish_fighter3000",
     "duda": "Polish_fighter3000",
-    # Erigaisi (all name orders)
     "arjun erigaisi": "GHANDEEVAM2003",
     "erigaisi arjun": "GHANDEEVAM2003",
     "erigaisi, arjun": "GHANDEEVAM2003",
@@ -52,6 +50,18 @@ KNOWN = {
     "viswanathan anand": "Viswanathananand",
     "sergey karjakin": "SergeyKarjakin",
     "vladimir kramnik": "VladimirKramnik",
+    "parham maghsoodloo": "ParhamMaghsoodloo",
+    "maghsoodloo, parham": "ParhamMaghsoodloo",
+    "maghsoodloo parham": "ParhamMaghsoodloo",
+    "maghsoodloo, parham": "ParhamMaghsoodloo",
+    "maghsoodloo parham": "ParhamMaghsoodloo",
+    "parham maghsoodloo": "ParhamMaghsoodloo",
+    "maghsoodloo": "ParhamMaghsoodloo",
+    "maghsoodloo": "ParhamMaghsoodloo",
+    "anthony atanasov": "aa175",
+    "atanasov, anthony": "aa175",
+    "atanasov anthony": "aa175",
+    "atanasov": "aa175",
 }
 
 
@@ -69,7 +79,6 @@ def _candidates(name: str):
     key = n.lower()
     if key in KNOWN:
         add(KNOWN[key])
-    # single-token last name (e.g. "Erigaisi")
     for part in re.findall(r"[A-Za-z]{3,}", n):
         if part.lower() in KNOWN:
             add(KNOWN[part.lower()])
@@ -95,7 +104,6 @@ def _candidates(name: str):
         if len(parts) >= 2:
             add(parts[-1] + parts[0])
             add(parts[0] + parts[-1])
-            # "Erigaisi Arjun" → also try joined lower known
             joined = " ".join(parts).lower()
             if joined in KNOWN:
                 add(KNOWN[joined])
@@ -121,13 +129,16 @@ def resolve_player_assets(display_name: str) -> Tuple[Optional[str], Optional[st
     want = set(re.findall(r"[a-z]{3,}", (display_name or "").lower()))
     want -= {"the", "and", "von", "van"}
     profile, used = None, None
+    known_vals = {v.lower() for v in KNOWN.values()}
     for cand in _candidates(display_name):
         prof = _fetch(cand)
-        if not prof or not prof.get("avatar"):
+        if not prof:
             continue
-        if cand in KNOWN.values() or cand.upper() in {v.upper() for v in KNOWN.values()}:
+        if cand.lower() in known_vals:
             profile, used = prof, cand
             break
+        if not prof.get("avatar"):
+            continue
         got = set(re.findall(r"[a-z]{3,}", (prof.get("name") or "").lower()))
         if want and got and (want & got):
             profile, used = prof, cand
