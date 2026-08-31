@@ -1,7 +1,6 @@
 #!/bin/sh
 cd /app
 
-# Chess64 brand logo (optional Railway var BRAND_LOGO_B64 = base64 of PNG)
 if [ -n "$BRAND_LOGO_B64" ]; then
   if printf '%s' "$BRAND_LOGO_B64" | tr -d '\n\r\t ' | base64 -d > /app/brand_logo.png 2>/dev/null; then
     echo "OK: brand_logo.png from BRAND_LOGO_B64 ($(wc -c < /app/brand_logo.png) bytes)"
@@ -13,8 +12,6 @@ elif [ -f /app/brand_logo.b64 ] && [ "$(wc -c < /app/brand_logo.b64)" -gt 100 ];
   base64 -d < /app/brand_logo.b64 > /app/brand_logo.png 2>/dev/null && echo "OK: brand_logo.png from file" || true
 fi
 
-
-# Write a file from: raw JSON env, base64 env, or "path-looking" env that is actually JSON body
 try_write_cred() {
   out="$1"
   label="$2"
@@ -72,14 +69,15 @@ export YOUTUBE_TOKEN=/app/token.json
 ls -la /app/client_secrets.json /app/token.json 2>&1 || true
 
 if [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -f chess_telegram_bot_v2.py ]; then
-  echo "Starting Telegram bot (auto-restart)..."
+  echo "Starting Telegram bot (auto-restart, single-instance)..."
   (
+    sleep 8
     while true; do
       echo "[bot] launching chess_telegram_bot_v2.py"
-      python3 chess_telegram_bot_v2.py
+      flock -n /tmp/chess64_telegram.lock python3 chess_telegram_bot_v2.py || python3 chess_telegram_bot_v2.py
       code=$?
-      echo "[bot] exited code=$code — restart in 5s"
-      sleep 5
+      echo "[bot] exited code=$code — restart in 8s"
+      sleep 8
     done
   ) &
   echo "Telegram bot supervisor PID=$!"
