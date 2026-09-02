@@ -37,6 +37,7 @@ RUN python3 patch_brand_logo.py || true
 RUN python3 patch_pro_studio.py || true
 RUN python3 patch_broadcast_elite.py || true
 RUN python3 patch_look_v2.py || true
+RUN python3 patch_ffmpeg_stable.py || true
 RUN python3 patch_bot_stability.py || true
 RUN python3 patch_bot_manual_photos.py || true
 RUN python3 patch_bot_reconnect.py || true
