@@ -40,6 +40,7 @@ RUN python3 patch_look_v2.py || true
 RUN python3 patch_ffmpeg_stable.py || true
 RUN python3 patch_speed.py || true
 RUN python3 patch_gemini_viral.py || true
+RUN python3 patch_gemini_model.py || true
 RUN python3 patch_bot_stability.py || true
 RUN python3 patch_bot_manual_photos.py || true
 RUN python3 patch_bot_reconnect.py || true
