@@ -27,9 +27,6 @@ def _write_concat_file(frames: list[TimedFrame], list_path: str) -> None:
         for tf in frames:
             f.write(f"file '{os.path.abspath(tf.path)}'\n")
             f.write(f"duration {tf.duration_sec}\n")
-        # ffmpeg's concat demuxer needs the last file repeated without a duration
-        if frames:
-            f.write(f"file '{os.path.abspath(frames[-1].path)}'\n")
 
 
 def build_video(
@@ -53,7 +50,6 @@ def build_video(
         cmd += ["-i", audio_path]
 
     cmd += [
-        "-vsync", "vfr",
         "-r", str(fps),
         "-c:v", "libx264",
         "-preset", "ultrafast",
