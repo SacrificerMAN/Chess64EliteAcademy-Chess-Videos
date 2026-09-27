@@ -76,7 +76,7 @@ def run_job(job: Job, pgn_text: str, platform: str = "PGN") -> dict:
 
     frames: list[TimedFrame] = []
     board = chess.Board()
-    intro_img = intro_card(ctx, game)
+    intro_img = intro_card(ctx, f"{game.white} vs {game.black}", settings.brand_hashtag)
     intro_path = os.path.join(workdir, "intro.png")
     intro_img.save(intro_path)
     frames.append(TimedFrame(intro_path, INTRO_HOLD_SEC))
