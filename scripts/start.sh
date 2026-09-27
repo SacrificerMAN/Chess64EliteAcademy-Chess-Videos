@@ -9,7 +9,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 echo "== Chess64 Elite Academy: applying patches =="
-python patches/run_patches.py
+python patches/run_patches.py || echo "WARNING: some patches failed (non-fatal)"
 echo "== decoding move sounds =="
 python assets/audio/decode_sounds.py || true
 
