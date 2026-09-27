@@ -16,7 +16,7 @@ from app.player_assets import PlayerAssets, resolve_player_assets
 from app.render.board_renderer import RenderContext, intro_card, render_frame
 from app.render.shorts import build_shorts
 from app.render.thumbnails import make_thumbnails
-from app.render.video_builder import TimedFrame, build_video, build_move_click_track, mix_audio_tracks
+from app.render.video_builder import TimedFrame, build_video, build_move_click_track, build_typed_move_sounds, mix_audio_tracks
 from app.storage import Job
 from PIL import Image
 import chess
@@ -66,36 +66,53 @@ def run_job(job: Job, pgn_text: str, platform: str = "PGN") -> dict:
     commentary_lines = generate_commentary(game, short=False)
     commentary_by_ply = {c["ply"]: c["line"] for c in commentary_lines if c.get("line")}
     narration_path = None
-    if commentary_lines:
-        narration_path = os.path.join(workdir, "narration_long.mp3")
-        narration_path = synthesize_commentary(commentary_lines, narration_path)
+    if commentary_by_ply:
+        try:
+            narration_path = os.path.join(workdir, "narration_long.mp3")
+            synthesize_commentary(commentary_by_ply, narration_path, duration_per_move=duration)
+        except Exception as e:
+            logger.warning("commentary TTS skipped: %s", e)
+            narration_path = None
 
     frames: list[TimedFrame] = []
-    intro_img = intro_card(ctx, f"{game.white} vs {game.black}", settings.brand_hashtag)
-    intro_path = os.path.join(workdir, "frame_intro.png")
+    board = chess.Board()
+    intro_img = intro_card(ctx, game)
+    intro_path = os.path.join(workdir, "intro.png")
     intro_img.save(intro_path)
     frames.append(TimedFrame(intro_path, INTRO_HOLD_SEC))
-
-    board = chess.Board()
     last_frame_for_thumb = intro_img
-    move_timestamps: list[float] = []
+    sound_events: list[tuple[float, str]] = []  # (t, kind) kind=move|capture|check
     t_cursor = INTRO_HOLD_SEC
     for i, m in enumerate(game.moves):
         move = chess.Move.from_uci(m.move_uci)
         best_move = chess.Move.from_uci(m.best_move_uci) if m.best_move_uci else None
+        is_capture = board.is_capture(move)
         frame_img = render_frame(ctx, board, last_move=move, best_move=best_move, eval_cp=m.eval_cp)
         board.push(move)
+        is_check = board.is_check()
         frame_path = os.path.join(workdir, f"frame_{i:04d}.png")
         frame_img.save(frame_path)
         frames.append(TimedFrame(frame_path, duration))
-        move_timestamps.append(t_cursor)  # click plays the instant this move's frame appears
+        if is_check:
+            kind = "check"
+        elif is_capture:
+            kind = "capture"
+        else:
+            kind = "move"
+        sound_events.append((t_cursor, kind))
         t_cursor += duration
         last_frame_for_thumb = frame_img
 
     total_duration = t_cursor
     click_track_path = os.path.join(workdir, "clicks.aac")
-    build_move_click_track(move_timestamps, total_duration, click_track_path,
-                            click_asset_path=settings.move_click_asset_path)
+    build_typed_move_sounds(
+        sound_events,
+        total_duration,
+        click_track_path,
+        move_path=settings.move_click_asset_path,
+        capture_path=settings.capture_sound_path,
+        check_path=settings.check_sound_path,
+    )
 
     audio_path = click_track_path
     if narration_path:
@@ -128,7 +145,9 @@ def run_job(job: Job, pgn_text: str, platform: str = "PGN") -> dict:
         "shorts": shorts_paths,
         "thumbnails": thumb_paths,
         "seo": seo,
-        "truncated": game.truncated,
+        "workdir": game.workdir if hasattr(game, "workdir") else workdir,
     }
-    job.data.update(result)
+    job.data.update({k: v for k, v in result.items() if k != "game"})
+    job.data["white"] = game.white
+    job.data["black"] = game.black
     return result
