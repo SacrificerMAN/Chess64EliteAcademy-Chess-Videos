@@ -285,7 +285,8 @@ async def _start_job_from_pgn(update: Update, context: ContextTypes.DEFAULT_TYPE
 
         game = result["game"]
         seo = result["seo"]
-        truncated_note = "\n⚠️ Game truncated to max move limit." if result["truncated"] else ""
+        is_trunc = bool(result.get("truncated") or getattr(game, "truncated", False))
+        truncated_note = "\n⚠️ Game truncated to max move limit." if is_trunc else ""
         caption = (
             f"*{seo['title']}*\n{seo['title_hi']}\n\n"
             f"{game.white} vs {game.black} ({game.event or platform})"
@@ -339,7 +340,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             )
             await query.message.reply_text(f"✅ Uploaded: {url}")
         except Exception as exc:
-            logger.error("YouTube upload failed: %s\n%s", exc, traceback.format_exc())
+            logger.error("YouTube upload failed: %s\n%s", exp if False else exc, traceback.format_exc())
             await query.message.reply_text(f"❌ YouTube upload failed: {exc}")
 
 
