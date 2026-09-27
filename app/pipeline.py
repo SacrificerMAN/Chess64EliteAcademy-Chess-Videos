@@ -64,14 +64,18 @@ def run_job(job: Job, pgn_text: str, platform: str = "PGN") -> dict:
     # ---- [2/5] Rendering long ----
     job.set_step(2, "rendering_long")
     commentary_lines = generate_commentary(game, short=False)
-    commentary_by_ply = {c["ply"]: c["line"] for c in commentary_lines if c.get("line")}
+    commentary_by_ply = {}
+    if isinstance(commentary_lines, list):
+        for c in commentary_lines:
+            if isinstance(c, dict) and c.get("line"):
+                commentary_by_ply[c.get("ply", len(commentary_by_ply))] = c["line"]
     narration_path = None
     if commentary_by_ply:
         try:
-            narration_path = os.path.join(workdir, "narration_long.mp3")
-            synthesize_commentary(
+            candidate = os.path.join(workdir, "narration_long.mp3")
+            narration_path = synthesize_commentary(
                 [{"ply": k, "line": v} for k, v in commentary_by_ply.items()],
-                narration_path,
+                candidate,
             )
         except Exception as e:
             logger.warning("commentary TTS skipped: %s", e)
@@ -84,7 +88,7 @@ def run_job(job: Job, pgn_text: str, platform: str = "PGN") -> dict:
     intro_img.save(intro_path)
     frames.append(TimedFrame(intro_path, INTRO_HOLD_SEC))
     last_frame_for_thumb = intro_img
-    sound_events: list[tuple[float, str]] = []  # (t, kind) kind=move|capture|check
+    sound_events: list[tuple[float, str]] = []
     t_cursor = INTRO_HOLD_SEC
     for i, m in enumerate(game.moves):
         move = chess.Move.from_uci(m.move_uci)
@@ -119,8 +123,12 @@ def run_job(job: Job, pgn_text: str, platform: str = "PGN") -> dict:
 
     audio_path = click_track_path
     if narration_path:
-        mixed_path = os.path.join(workdir, "audio_mixed.aac")
-        audio_path = mix_audio_tracks([click_track_path, narration_path], mixed_path)
+        try:
+            mixed_path = os.path.join(workdir, "audio_mixed.aac")
+            audio_path = mix_audio_tracks([click_track_path, narration_path], mixed_path)
+        except Exception as e:
+            logger.warning("audio mix skipped, clicks only: %s", e)
+            audio_path = click_track_path
 
     long_video_path = os.path.join(workdir, "long.mp4")
     build_video(frames, long_video_path, audio_path=audio_path)
