@@ -10,6 +10,8 @@ cd "$(dirname "$0")/.."
 
 echo "== Chess64 Elite Academy: applying patches =="
 python patches/run_patches.py
+echo "== decoding move sounds =="
+python assets/audio/decode_sounds.py || true
 
 LOCK_FILE="${CHESS64_WORKDIR:-/tmp/chess64_jobs}/bot.lock"
 mkdir -p "$(dirname "$LOCK_FILE")"

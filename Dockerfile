@@ -18,6 +18,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 RUN chmod +x scripts/start.sh
+RUN python assets/audio/decode_sounds.py || true
 
 ENV PORT=8080 \
     CHESS64_WORKDIR=/tmp/chess64_jobs \

@@ -1,16 +1,10 @@
-Drop a licensed or royalty-free "move click" sound here as
-`move_click.mp3` (or `.wav` / `.m4a` / `.ogg`) and the pipeline will use it
-automatically for every move, instead of the built-in synthesized
-"wood knock" sound.
+Chess move sounds (Chess.com-style pack used by the pipeline):
 
-We deliberately do NOT bundle Chess.com's own move sound — it's their
-proprietary audio asset. If you want that exact sound, you'd need to
-supply your own copy that you're licensed to use.
+- move_click.mp3       — primary move click (required for real clicks)
+- chess_move_self.mp3  — same as above (fallback name)
+- chess_capture.mp3    — capture (available for future use)
+- chess_move_check.mp3 — check (available for future use)
 
-Good free-license sources for a chess/click sound effect:
-  - freesound.org (check each sound's specific license — many are CC0)
-  - Mixkit (https://mixkit.co/free-sound-effects/) — free for commercial use
-  - Zapsplat (https://www.zapsplat.com/) — free with attribution or paid tier
+If none of move_click / chess_move_self exist, a synthetic wood-knock is used.
 
-Keep the clip short (under ~150ms) — it gets triggered once per move and
-layered many times across a game, so a short, punchy sound works best.
+`.mp3.b64` files are decoded on Docker build / start via decode_sounds.py.
