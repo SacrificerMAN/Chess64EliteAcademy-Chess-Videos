@@ -69,7 +69,10 @@ def run_job(job: Job, pgn_text: str, platform: str = "PGN") -> dict:
     if commentary_by_ply:
         try:
             narration_path = os.path.join(workdir, "narration_long.mp3")
-            synthesize_commentary(commentary_by_ply, narration_path, duration_per_move=duration)
+            synthesize_commentary(
+                [{"ply": k, "line": v} for k, v in commentary_by_ply.items()],
+                narration_path,
+            )
         except Exception as e:
             logger.warning("commentary TTS skipped: %s", e)
             narration_path = None
@@ -145,7 +148,8 @@ def run_job(job: Job, pgn_text: str, platform: str = "PGN") -> dict:
         "shorts": shorts_paths,
         "thumbnails": thumb_paths,
         "seo": seo,
-        "workdir": game.workdir if hasattr(game, "workdir") else workdir,
+        "truncated": getattr(game, "truncated", False),
+        "workdir": workdir,
     }
     job.data.update({k: v for k, v in result.items() if k != "game"})
     job.data["white"] = game.white
