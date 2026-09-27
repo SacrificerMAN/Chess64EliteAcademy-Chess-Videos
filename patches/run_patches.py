@@ -16,11 +16,20 @@ import glob
 import importlib.util
 import logging
 import os
+import sys
 
 logger = logging.getLogger("chess64.patches")
 logging.basicConfig(level=logging.INFO)
 
 PATCH_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(PATCH_DIR)
+
+# Running as `python patches/run_patches.py` only puts patches/ on sys.path,
+# not the project root — so `from app...` imports inside each patch would
+# fail with ModuleNotFoundError. Make sure the root is importable regardless
+# of how this script is invoked (direct, -m, or from a different cwd).
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
 
 def _load_module(path: str):
