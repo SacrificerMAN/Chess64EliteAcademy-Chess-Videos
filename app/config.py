@@ -55,19 +55,29 @@ class Settings:
         os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets"),
     )
 
-    @property
-    def move_click_asset_path(self) -> str | None:
-        """
-        Chess.com-style move click. Prefers move_click.* then chess_move_self.mp3.
-        Fallback: synthetic wood-knock.
-        """
+    def _audio_asset(self, *names: str) -> str | None:
         audio_dir = os.path.join(self.assets_dir, "audio")
-        for name in ("move_click", "chess_move_self"):
+        for name in names:
             for ext in ("mp3", "wav", "m4a", "ogg"):
                 path = os.path.join(audio_dir, f"{name}.{ext}")
                 if os.path.isfile(path):
                     return path
         return None
+
+    @property
+    def move_click_asset_path(self) -> str | None:
+        """Normal move click (chess.com-style)."""
+        return self._audio_asset("move_click", "chess_move_self")
+
+    @property
+    def capture_sound_path(self) -> str | None:
+        """Capture sound; falls back to move click if missing."""
+        return self._audio_asset("chess_capture", "capture") or self.move_click_asset_path
+
+    @property
+    def check_sound_path(self) -> str | None:
+        """Check sound; falls back to move click if missing."""
+        return self._audio_asset("chess_move_check", "move_check", "check") or self.move_click_asset_path
 
     THEMES: dict = field(
         default_factory=lambda: {
