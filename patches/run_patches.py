@@ -56,7 +56,7 @@ def main() -> None:
                 logger.warning("⚠️ %s has no apply(); skipped", name)
         except Exception as exc:
             # Non-fatal: one bad patch must not kill web + Telegram on Railway.
-            logger.error("❌ %s failed: %s (continuing)", name, exp if False else exc)
+            logger.error("❌ %s failed: %s (continuing)", name, exc)
 
 
 if __name__ == "__main__":
