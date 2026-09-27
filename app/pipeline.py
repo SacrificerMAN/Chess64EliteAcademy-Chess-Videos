@@ -16,7 +16,7 @@ from app.player_assets import PlayerAssets, resolve_player_assets
 from app.render.board_renderer import RenderContext, intro_card, render_frame
 from app.render.shorts import build_shorts
 from app.render.thumbnails import make_thumbnails
-from app.render.video_builder import TimedFrame, build_video
+from app.render.video_builder import TimedFrame, build_video, build_move_click_track, mix_audio_tracks
 from app.storage import Job
 from PIL import Image
 import chess
@@ -65,10 +65,10 @@ def run_job(job: Job, pgn_text: str, platform: str = "PGN") -> dict:
     job.set_step(2, "rendering_long")
     commentary_lines = generate_commentary(game, short=False)
     commentary_by_ply = {c["ply"]: c["line"] for c in commentary_lines if c.get("line")}
-    audio_path = None
+    narration_path = None
     if commentary_lines:
-        audio_path = os.path.join(workdir, "narration_long.mp3")
-        audio_path = synthesize_commentary(commentary_lines, audio_path)
+        narration_path = os.path.join(workdir, "narration_long.mp3")
+        narration_path = synthesize_commentary(commentary_lines, narration_path)
 
     frames: list[TimedFrame] = []
     intro_img = intro_card(ctx, f"{game.white} vs {game.black}", settings.brand_hashtag)
@@ -78,6 +78,8 @@ def run_job(job: Job, pgn_text: str, platform: str = "PGN") -> dict:
 
     board = chess.Board()
     last_frame_for_thumb = intro_img
+    move_timestamps: list[float] = []
+    t_cursor = INTRO_HOLD_SEC
     for i, m in enumerate(game.moves):
         move = chess.Move.from_uci(m.move_uci)
         best_move = chess.Move.from_uci(m.best_move_uci) if m.best_move_uci else None
@@ -86,7 +88,18 @@ def run_job(job: Job, pgn_text: str, platform: str = "PGN") -> dict:
         frame_path = os.path.join(workdir, f"frame_{i:04d}.png")
         frame_img.save(frame_path)
         frames.append(TimedFrame(frame_path, duration))
+        move_timestamps.append(t_cursor)  # click plays the instant this move's frame appears
+        t_cursor += duration
         last_frame_for_thumb = frame_img
+
+    total_duration = t_cursor
+    click_track_path = os.path.join(workdir, "clicks.aac")
+    build_move_click_track(move_timestamps, total_duration, click_track_path)
+
+    audio_path = click_track_path
+    if narration_path:
+        mixed_path = os.path.join(workdir, "audio_mixed.aac")
+        audio_path = mix_audio_tracks([click_track_path, narration_path], mixed_path)
 
     long_video_path = os.path.join(workdir, "long.mp4")
     build_video(frames, long_video_path, audio_path=audio_path)

@@ -109,3 +109,76 @@ def crop_segment(input_path: str, output_path: str, start_sec: float, end_sec: f
     if proc.returncode != 0:
         raise RuntimeError(f"FFmpeg crop failed: {proc.stderr[-1500:]}")
     return output_path
+
+
+def build_move_click_track(
+    move_timestamps_sec: list[float],
+    total_duration_sec: float,
+    out_path: str,
+    click_freq_hz: int = 1500,
+    click_len_sec: float = 0.06,
+) -> str:
+    """
+    Synthesizes a short percussive "click" at each move timestamp and mixes
+    them into one audio track spanning the whole video. No external sound
+    asset needed — each click is a synthesized sine blip with a fast fade,
+    generated entirely by ffmpeg's lavfi source. Silence-only track if there
+    are no timestamps (still returns a valid, playable file).
+    """
+    if not move_timestamps_sec:
+        cmd = [
+            "ffmpeg", "-y", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=mono",
+            "-t", str(total_duration_sec), "-c:a", "aac", out_path,
+        ]
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+        if proc.returncode != 0:
+            raise RuntimeError(f"FFmpeg silence track failed: {proc.stderr[-1500:]}")
+        return out_path
+
+    inputs: list[str] = []
+    filter_parts: list[str] = []
+    for i, ts in enumerate(move_timestamps_sec):
+        inputs += ["-f", "lavfi", "-i", f"sine=frequency={click_freq_hz}:duration={click_len_sec}"]
+        delay_ms = max(0, int(ts * 1000))
+        filter_parts.append(
+            f"[{i}:a]volume=0.55,afade=t=out:st=0:d={click_len_sec},"
+            f"adelay={delay_ms}|{delay_ms}[c{i}]"
+        )
+    mix_inputs = "".join(f"[c{i}]" for i in range(len(move_timestamps_sec)))
+    filter_complex = ";".join(filter_parts) + (
+        f";{mix_inputs}amix=inputs={len(move_timestamps_sec)}:duration=longest:normalize=0,"
+        f"apad=whole_dur={total_duration_sec}[mixed]"
+    )
+    cmd = [
+        "ffmpeg", "-y", *inputs,
+        "-filter_complex", filter_complex,
+        "-map", "[mixed]",
+        "-t", str(total_duration_sec),
+        "-c:a", "aac",
+        out_path,
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise RuntimeError(f"FFmpeg click track failed: {proc.stderr[-1500:]}")
+    return out_path
+
+
+def mix_audio_tracks(track_paths: list[str], out_path: str) -> str:
+    """Mixes 2+ audio tracks (e.g. move clicks + narration) down to one."""
+    tracks = [t for t in track_paths if t]
+    if len(tracks) == 1:
+        import shutil as _shutil
+
+        _shutil.copy(tracks[0], out_path)
+        return out_path
+    cmd = ["ffmpeg", "-y"]
+    for t in tracks:
+        cmd += ["-i", t]
+    cmd += [
+        "-filter_complex", f"amix=inputs={len(tracks)}:duration=longest:normalize=0",
+        "-c:a", "aac", out_path,
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise RuntimeError(f"FFmpeg audio mix failed: {proc.stderr[-1500:]}")
+    return out_path

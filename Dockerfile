@@ -22,7 +22,8 @@ RUN chmod +x scripts/start.sh
 ENV PORT=8080 \
     CHESS64_WORKDIR=/tmp/chess64_jobs \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app
+    PYTHONPATH=/app \
+    PATH="/usr/games:${PATH}"
 
 EXPOSE 8080
 
