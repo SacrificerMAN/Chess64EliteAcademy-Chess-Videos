@@ -55,6 +55,20 @@ class Settings:
         os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets"),
     )
 
+    @property
+    def move_click_asset_path(self) -> str | None:
+        """
+        Optional licensed/royalty-free "move" sound you've added yourself.
+        Drop a file at assets/audio/move_click.mp3 (or .wav) and it's used
+        automatically; otherwise the pipeline falls back to a synthesized
+        wood-knock click. We never bundle Chess.com's own sound here.
+        """
+        for ext in ("mp3", "wav", "m4a", "ogg"):
+            path = os.path.join(self.assets_dir, "audio", f"move_click.{ext}")
+            if os.path.isfile(path):
+                return path
+        return None
+
     THEMES: dict = field(
         default_factory=lambda: {
             "brown": {"light": "#eed7ba", "dark": "#8a5a3b", "highlight": "#d4af37"},

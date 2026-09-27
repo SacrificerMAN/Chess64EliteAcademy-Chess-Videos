@@ -94,7 +94,8 @@ def run_job(job: Job, pgn_text: str, platform: str = "PGN") -> dict:
 
     total_duration = t_cursor
     click_track_path = os.path.join(workdir, "clicks.aac")
-    build_move_click_track(move_timestamps, total_duration, click_track_path)
+    build_move_click_track(move_timestamps, total_duration, click_track_path,
+                            click_asset_path=settings.move_click_asset_path)
 
     audio_path = click_track_path
     if narration_path:

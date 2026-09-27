@@ -115,15 +115,19 @@ def build_move_click_track(
     move_timestamps_sec: list[float],
     total_duration_sec: float,
     out_path: str,
-    click_freq_hz: int = 1500,
-    click_len_sec: float = 0.06,
+    click_asset_path: str | None = None,
 ) -> str:
     """
-    Synthesizes a short percussive "click" at each move timestamp and mixes
-    them into one audio track spanning the whole video. No external sound
-    asset needed — each click is a synthesized sine blip with a fast fade,
-    generated entirely by ffmpeg's lavfi source. Silence-only track if there
-    are no timestamps (still returns a valid, playable file).
+    Builds one audio track spanning the whole video with a "move" sound at
+    each timestamp.
+
+    If `click_asset_path` points to a real audio file (e.g. a royalty-free
+    or licensed "chess move" sound you've added under assets/audio/), that
+    file is used verbatim, reused at every move timestamp. We deliberately
+    do NOT fetch or bundle Chess.com's own sound — it's their proprietary
+    asset. Without a supplied asset, a synthesized two-layer "wood knock"
+    (low sine thump + filtered noise tick, both with a fast decay envelope)
+    is generated instead — built from scratch, not sampled from anywhere.
     """
     if not move_timestamps_sec:
         cmd = [
@@ -135,28 +139,56 @@ def build_move_click_track(
             raise RuntimeError(f"FFmpeg silence track failed: {proc.stderr[-1500:]}")
         return out_path
 
-    inputs: list[str] = []
-    filter_parts: list[str] = []
-    for i, ts in enumerate(move_timestamps_sec):
-        inputs += ["-f", "lavfi", "-i", f"sine=frequency={click_freq_hz}:duration={click_len_sec}"]
-        delay_ms = max(0, int(ts * 1000))
-        filter_parts.append(
-            f"[{i}:a]volume=0.55,afade=t=out:st=0:d={click_len_sec},"
-            f"adelay={delay_ms}|{delay_ms}[c{i}]"
+    n = len(move_timestamps_sec)
+    delays_ms = [max(0, int(ts * 1000)) for ts in move_timestamps_sec]
+
+    if click_asset_path and os.path.isfile(click_asset_path):
+        # Read the asset once, split into N copies, delay each to its
+        # timestamp, then mix — avoids opening the file N separate times.
+        split_labels = "".join(f"[s{i}]" for i in range(n))
+        delay_parts = [
+            f"[s{i}]adelay={d}|{d}[c{i}]" for i, d in enumerate(delays_ms)
+        ]
+        mix_inputs = "".join(f"[c{i}]" for i in range(n))
+        filter_complex = (
+            f"[0:a]asplit={n}{split_labels};"
+            + ";".join(delay_parts)
+            + f";{mix_inputs}amix=inputs={n}:duration=longest:normalize=0,"
+            f"apad=whole_dur={total_duration_sec}[mixed]"
         )
-    mix_inputs = "".join(f"[c{i}]" for i in range(len(move_timestamps_sec)))
-    filter_complex = ";".join(filter_parts) + (
-        f";{mix_inputs}amix=inputs={len(move_timestamps_sec)}:duration=longest:normalize=0,"
-        f"apad=whole_dur={total_duration_sec}[mixed]"
-    )
-    cmd = [
-        "ffmpeg", "-y", *inputs,
-        "-filter_complex", filter_complex,
-        "-map", "[mixed]",
-        "-t", str(total_duration_sec),
-        "-c:a", "aac",
-        out_path,
-    ]
+        cmd = [
+            "ffmpeg", "-y", "-i", click_asset_path,
+            "-filter_complex", filter_complex,
+            "-map", "[mixed]", "-t", str(total_duration_sec), "-c:a", "aac", out_path,
+        ]
+    else:
+        # Synthesized "wood knock": low-frequency thump + short filtered
+        # noise burst, both with a fast decay so it reads as percussive
+        # rather than tonal.
+        inputs: list[str] = []
+        filter_parts: list[str] = []
+        for i, d in enumerate(delays_ms):
+            inputs += ["-f", "lavfi", "-i", "sine=frequency=180:duration=0.05"]
+            inputs += ["-f", "lavfi", "-i", "anoisesrc=color=white:duration=0.035:sample_rate=44100"]
+            thump_idx, tick_idx = 2 * i, 2 * i + 1
+            filter_parts.append(
+                f"[{thump_idx}:a]volume=0.8,afade=t=out:st=0:d=0.05,adelay={d}|{d}[thump{i}]"
+            )
+            filter_parts.append(
+                f"[{tick_idx}:a]highpass=f=1200,lowpass=f=5000,volume=0.5,"
+                f"afade=t=out:st=0:d=0.03,adelay={d}|{d}[tick{i}]"
+            )
+        mix_inputs = "".join(f"[thump{i}][tick{i}]" for i in range(n))
+        filter_complex = ";".join(filter_parts) + (
+            f";{mix_inputs}amix=inputs={2 * n}:duration=longest:normalize=0,"
+            f"alimiter=limit=0.9,apad=whole_dur={total_duration_sec}[mixed]"
+        )
+        cmd = [
+            "ffmpeg", "-y", *inputs,
+            "-filter_complex", filter_complex,
+            "-map", "[mixed]", "-t", str(total_duration_sec), "-c:a", "aac", out_path,
+        ]
+
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0:
         raise RuntimeError(f"FFmpeg click track failed: {proc.stderr[-1500:]}")
