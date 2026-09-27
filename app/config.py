@@ -1,70 +1,45 @@
-"""
-Central, env-driven configuration for Chess64 Elite Academy.
-Everything here is intentionally overridable via environment variables so the
-same image runs unmodified on Railway.
-"""
 from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
 
 
-def _list_ints(raw: str) -> list[int]:
-    return [int(x) for x in raw.split(",") if x.strip().isdigit()]
-
-
 @dataclass
 class Settings:
-    # Telegram
-    telegram_bot_token: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
-    allowed_user_ids: list[int] = field(
-        default_factory=lambda: _list_ints(os.getenv("ALLOWED_USER_IDS", ""))
-    )
+    """Runtime settings for Chess64 Elite Academy pipeline."""
 
-    # Gemini
-    gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
-    gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
+    port: int = int(os.environ.get("PORT", "8080"))
+    workdir: str = os.environ.get("CHESS64_WORKDIR", "/tmp/chess64_jobs")
+    telegram_bot_token: str = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+    allowed_user_ids: str = os.environ.get("ALLOWED_USER_IDS", "").strip()
+    gemini_api_key: str = os.environ.get("GEMINI_API_KEY", "").strip()
+    gemini_model: str = os.environ.get("GEMINI_MODEL", "gemini-3.1-flash-lite").strip()
+    default_duration_per_move: float = float(os.environ.get("DEFAULT_DURATION", "4"))
+    default_theme: str = os.environ.get("DEFAULT_THEME", "brown")
+    default_depth: int = int(os.environ.get("DEFAULT_DEPTH", "10"))
+    max_moves_for_bot: int = int(os.environ.get("MAX_MOVES_FOR_BOT", "40"))
+    youtube_privacy: str = os.environ.get("YOUTUBE_PRIVACY", "private")
+    stockfish_path: str = os.environ.get("STOCKFISH_PATH", "stockfish")
 
-    # YouTube
-    client_secrets_json: str = os.getenv("CLIENT_SECRETS_JSON", "")
-    youtube_token_json: str = os.getenv("YOUTUBE_TOKEN_JSON", "")
-    youtube_default_privacy: str = os.getenv("YOUTUBE_DEFAULT_PRIVACY", "private")
-    youtube_category_id: str = os.getenv("YOUTUBE_CATEGORY_ID", "20")  # Gaming
-
-    # Brand
-    channel_name: str = os.getenv("CHANNEL_NAME", "Chess64 Elite Academy")
-    channel_handle: str = os.getenv("CHANNEL_HANDLE", "@Chess64EliteAcademy")
-    telegram_channel_url: str = os.getenv("TELEGRAM_CHANNEL_URL", "https://t.me/Messi9354")
-    brand_hashtag: str = os.getenv("BRAND_HASHTAG", "#Chess64EliteAcademy")
-
-    # Video look & speed
-    board_size: int = int(os.getenv("BOARD_SIZE", "720"))
-    board_theme: str = os.getenv("BOARD_THEME", "brown")  # brown|green|blue|purple
-    default_duration_per_move: float = float(os.getenv("DEFAULT_DURATION_PER_MOVE", "4"))
-    default_depth: int = int(os.getenv("DEFAULT_DEPTH", "10"))
-    max_moves_for_bot: int = int(os.getenv("MAX_MOVES_FOR_BOT", "40"))
-    ffmpeg_threads: int = int(os.getenv("FFMPEG_THREADS", "1"))
-
-    # Web
-    port: int = int(os.getenv("PORT", "8080"))
-
-    # Paths
-    workdir: str = os.getenv("CHESS64_WORKDIR", "/tmp/chess64_jobs")
-    assets_dir: str = os.getenv(
-        "CHESS64_ASSETS_DIR",
-        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets"),
+    assets_dir: str = field(
+        default_factory=lambda: os.environ.get(
+            "CHESS64_ASSETS",
+            os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets"),
+        )
     )
 
     @property
     def move_click_asset_path(self) -> str | None:
         """
-        Optional licensed/royalty-free "move" sound you've added yourself.
-        Drop a file at assets/audio/move_click.mp3 (or .wav) and it's used
-        automatically; otherwise the pipeline falls back to a synthesized
-        wood-knock click. We never bundle Chess.com's own sound here.
+        Chess.com-style move click. Prefers assets/audio/move_click.* then
+        chess_move_self.mp3 (same pack as before). Fallback: synthetic knock.
         """
-        for ext in ("mp3", "wav", "m4a", "ogg"):
-            path = os.path.join(self.assets_dir, "audio", f"move_click.{ext}")
+        audio_dir = os.path.join(self.assets_dir, "audio")
+        candidates = []
+        for name in ("move_click", "chess_move_self"):
+            for ext in ("mp3", "wav", "m4a", "ogg"):
+                candidates.append(os.path.join(audio_dir, f"{name}.{ext}"))
+        for path in candidates:
             if os.path.isfile(path):
                 return path
         return None
@@ -78,12 +53,6 @@ class Settings:
         }
     )
 
-    NAVY_BG: str = "#0b1220"
-    GOLD: str = "#d4af37"
 
-    def theme_colors(self, theme: str | None = None) -> dict:
-        return self.THEMES.get(theme or self.board_theme, self.THEMES["brown"])
-
-
-settings = Settings()
-os.makedirs(settings.workdir, exist_ok=True)
+def get_settings() -> Settings:
+    return Settings()
