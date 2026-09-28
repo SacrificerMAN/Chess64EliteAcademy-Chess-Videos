@@ -100,10 +100,11 @@ def run_job(job: Job, pgn_text: str, platform: str = "PGN") -> dict:
         frame_path = os.path.join(workdir, f"frame_{i:04d}.png")
         frame_img.save(frame_path)
         frames.append(TimedFrame(frame_path, duration))
-        if is_check:
-            kind = "check"
-        elif is_capture:
+        # Capture has priority over check (Bxf7+ uses capture sound)
+        if is_capture:
             kind = "capture"
+        elif is_check:
+            kind = "check"
         else:
             kind = "move"
         sound_events.append((t_cursor, kind))
@@ -113,14 +114,12 @@ def run_job(job: Job, pgn_text: str, platform: str = "PGN") -> dict:
 
     total_duration = t_cursor
     click_track_path = os.path.join(workdir, "clicks.aac")
-    # FORCE: non-capture = soft synth only (move_path=None)
-    # capture = chess_capture.mp3 only when is_capture=True
-    print(f"[sound] VERSION=capture-only-v17-20260928 events={len(sound_events)}")
+    print(f"[sound] VERSION=sounds-v18-20260928 events={len(sound_events)}")
     build_typed_move_sounds(
         sound_events,
         total_duration,
         click_track_path,
-        move_path=None,
+        move_path=settings.move_click_asset_path,
         capture_path=settings.capture_sound_path,
         check_path=settings.check_sound_path,
     )
