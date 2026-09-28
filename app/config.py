@@ -60,7 +60,7 @@ class Settings:
         for name in names:
             for ext in ("mp3", "wav", "m4a", "ogg"):
                 path = os.path.join(audio_dir, f"{name}.{ext}")
-                if os.path.isfile(path):
+                if os.path.isfile(path) and os.path.getsize(path) >= 500:
                     return path
         return None
 
@@ -71,8 +71,8 @@ class Settings:
 
     @property
     def capture_sound_path(self) -> str | None:
-        """Capture sound; falls back to move click if missing."""
-        return self._audio_asset("chess_capture", "capture") or self.move_click_asset_path
+        """Capture sound ONLY — never falls back to move click."""
+        return self._audio_asset("chess_capture", "capture")
 
     @property
     def check_sound_path(self) -> str | None:
