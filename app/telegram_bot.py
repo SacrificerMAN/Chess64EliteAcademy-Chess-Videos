@@ -376,6 +376,10 @@ def build_application() -> Application:
 
 def run_bot() -> None:
     logging.basicConfig(level=logging.INFO)
+    # httpx logs every request URL at INFO — and Telegram's URLs contain the
+    # bot token, so it would leak into Railway logs. Keep these at WARNING.
+    for noisy in ("httpx", "httpcore"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
     app = build_application()
     logger.info("Chess64 bot starting (polling)...")
     app.run_polling(drop_pending_updates=True)

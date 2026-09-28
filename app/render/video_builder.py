@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 from dataclasses import dataclass
 
@@ -242,6 +243,65 @@ def _build_synth_kind(
     return out_path
 
 
+def _measure_peak_db(path: str) -> float | None:
+    """Peak level (dBFS) of an audio file via ffmpeg's volumedetect, or None."""
+    proc = subprocess.run(
+        ["ffmpeg", "-hide_banner", "-i", path, "-af", "volumedetect", "-f", "null", "-"],
+        capture_output=True, text=True,
+    )
+    m = re.search(r"max_volume:\s*(-?[\d.]+)\s*dB", proc.stderr)
+    return float(m.group(1)) if m else None
+
+
+def prepare_impact_asset(
+    src: str,
+    dst: str,
+    target_peak_db: float = -1.0,
+    max_gain_db: float = 30.0,
+) -> str:
+    """
+    Make an impact/capture sound audible and correctly timed, whatever the
+    source file's own loudness or padding is:
+
+      1. trim leading silence, so the hit lands exactly on the move frame
+      2. peak-normalize to `target_peak_db`, with a limiter to avoid clipping
+
+    A fixed gain (e.g. always 2x) can't do this: a quiet asset stays quiet.
+    Falls back to the untouched source if anything goes wrong, so a bad file
+    never breaks rendering.
+    """
+    trimmed = dst + ".trim.wav"
+    r = subprocess.run(
+        ["ffmpeg", "-y", "-i", src,
+         "-af", "silenceremove=start_periods=1:start_threshold=-55dB:start_silence=0",
+         "-ar", "44100", "-ac", "1", trimmed],
+        capture_output=True, text=True,
+    )
+    work = trimmed if (r.returncode == 0 and os.path.isfile(trimmed)
+                       and os.path.getsize(trimmed) > 200) else src
+
+    peak = _measure_peak_db(work)
+    if peak is None or peak <= -90.0:
+        print(f"[sound] asset peak unmeasurable ({peak}); using source as-is")
+        return src
+
+    gain = max(-12.0, min(max_gain_db, target_peak_db - peak))
+    r2 = subprocess.run(
+        ["ffmpeg", "-y", "-i", work,
+         "-af", f"volume={gain:.2f}dB,alimiter=limit=0.95",
+         "-ar", "44100", "-ac", "1", dst],
+        capture_output=True, text=True,
+    )
+    if r2.returncode != 0 or not os.path.isfile(dst):
+        print(f"[sound] asset normalize failed, using source as-is: {r2.stderr[-300:]}")
+        return src
+    print(
+        f"[sound] asset {os.path.basename(src)}: peak {peak:.1f} dB "
+        f"-> gain {gain:+.1f} dB (trimmed={work == trimmed}) -> target {target_peak_db:.1f} dB"
+    )
+    return dst
+
+
 def build_typed_move_sounds(
     events: list[tuple[float, str]],
     total_duration_sec: float,
@@ -297,17 +357,11 @@ def build_typed_move_sounds(
         part = f"{base}_capture.aac"
         if cap_p:
             print(f"[sound] CAPTURE using asset {cap_p} size={os.path.getsize(cap_p)}")
-            build_move_click_track(by_kind["capture"], total_duration_sec, part, cap_p)
-            # Boost so it stands out vs soft move click
-            boosted = part + ".boost.aac"
-            bp = subprocess.run(
-                ["ffmpeg", "-y", "-i", part, "-filter:a", "volume=2.0", "-c:a", "aac", boosted],
-                capture_output=True, text=True,
-            )
-            if bp.returncode == 0 and os.path.isfile(boosted):
-                import shutil
-                shutil.move(boosted, part)
-                print("[sound] CAPTURE volume boosted 2.0x")
+            # Trim leading silence + peak-normalize so the hit is clearly
+            # audible and lands on the move frame, regardless of how quiet
+            # or padded the source asset is.
+            prepared = prepare_impact_asset(cap_p, part + ".asset.wav")
+            build_move_click_track(by_kind["capture"], total_duration_sec, part, prepared)
         else:
             print("[sound] CAPTURE using loud synth (no valid asset)")
             _build_synth_kind(by_kind["capture"], total_duration_sec, part, kind="capture")
