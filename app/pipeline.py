@@ -107,16 +107,20 @@ def run_job(job: Job, pgn_text: str, platform: str = "PGN") -> dict:
         else:
             kind = "move"
         sound_events.append((t_cursor, kind))
+        print(f"[sound] ply={i} kind={kind} uci={m.move_uci} capture={is_capture} check={is_check}")
         t_cursor += duration
         last_frame_for_thumb = frame_img
 
     total_duration = t_cursor
     click_track_path = os.path.join(workdir, "clicks.aac")
+    # FORCE: non-capture = soft synth only (move_path=None)
+    # capture = chess_capture.mp3 only when is_capture=True
+    print(f"[sound] VERSION=capture-only-v17-20260928 events={len(sound_events)}")
     build_typed_move_sounds(
         sound_events,
         total_duration,
         click_track_path,
-        move_path=settings.move_click_asset_path,
+        move_path=None,
         capture_path=settings.capture_sound_path,
         check_path=settings.check_sound_path,
     )
