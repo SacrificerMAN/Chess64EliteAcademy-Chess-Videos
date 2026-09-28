@@ -1,5 +1,9 @@
 FROM python:3.12-slim
 
+# BUILD_ID forces Railway to rebuild (not reuse stale layers)
+ARG BUILD_ID=sounds-v18-20260928
+ENV CHESS64_BUILD_ID=${BUILD_ID}
+
 # ffmpeg (render), stockfish (analysis), and cairo/pango libs (cairosvg
 # rendering of the chess board SVG) — all required at runtime, not just build.
 RUN apt-get update && apt-get install -y --no-install-recommends \
