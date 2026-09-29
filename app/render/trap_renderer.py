@@ -1,7 +1,9 @@
 """
-Famous Traps style — pixel-match reference educational Shorts:
-  soft gold title, dark-green board, clean yellow arrows + square highlights,
-  SAN under board, generous black margins (9:16).
+Famous Traps — exact visual copy of reference (vOew1).
+Measured from reference frames:
+  BG #0B0C0E | light #3A473E | dark #222824
+  title/arrow/SAN #F8D942 | title ~64px | board ~900px centered
+  no coords, no subtitle, no hashtag on frames
 """
 from __future__ import annotations
 
@@ -18,22 +20,21 @@ from app.utils import even, fit_text, load_font, normalize_frame
 
 TRAP_W, TRAP_H = 1080, 1920
 
-# Reference palette (from vOew1 frames)
-TITLE_YELLOW = "#E8C84A"   # soft gold, not neon
-MOVE_YELLOW = "#E8C84A"
-ARROW_YELLOW = "#E8C84A"
-HIGHLIGHT = "#C9A84C"      # muted gold last-move squares
-BG = "#0D0D0D"
-# Dark green board (reference) — not charcoal gray
-SQ_LIGHT = "#5A6B52"
-SQ_DARK = "#3A4636"
+# Exact palette sampled from reference frames
+BG = "#0B0C0E"
+SQ_LIGHT = "#3A473E"
+SQ_DARK = "#222824"
+TITLE_YELLOW = "#F8D942"
+MOVE_YELLOW = "#F2D84C"
+ARROW_YELLOW = "#F9CA26"
+HIGHLIGHT = "#C4A32A"
 
 
 @dataclass
 class TrapRenderContext:
     series_title: str = "Famous Traps"
     trap_name: str = ""
-    theme: str = "dark_green"
+    theme: str = "ref_green"
 
 
 def _board_to_pil(
@@ -48,7 +49,7 @@ def _board_to_pil(
         "square light lastmove": HIGHLIGHT,
         "square dark lastmove": HIGHLIGHT,
         "margin": BG,
-        "coord": "#8A9A82",
+        "coord": "#6A7A6A",
     }
     arrows = []
     if arrow_move:
@@ -65,7 +66,7 @@ def _board_to_pil(
         lastmove=last_move,
         colors=fill,
         arrows=arrows,
-        coordinates=False,  # reference has no a-h / 1-8 labels
+        coordinates=False,
     )
     png_bytes = cairosvg.svg2png(
         bytestring=svg_data.encode("utf-8"),
@@ -84,55 +85,53 @@ def render_trap_frame(
     canvas = Image.new("RGB", (TRAP_W, TRAP_H), BG)
     draw = ImageDraw.Draw(canvas)
 
-    # Soft gold title — reference size (~72px), centered, clean (no glow)
-    title_font = load_font(72, bold=True)
+    # Title: reference measured ~65px tall, ~529px wide → font 64
+    title_font = load_font(64, bold=True)
     title = ctx.series_title or "Famous Traps"
     bbox = draw.textbbox((0, 0), title, font=title_font)
     tw = bbox[2] - bbox[0]
     th = bbox[3] - bbox[1]
-    title_y = 120
+    title_y = 154  # measured from reference
     draw.text(((TRAP_W - tw) / 2, title_y), title, font=title_font, fill=TITLE_YELLOW)
 
-    # Board: generous top/bottom black space like reference
-    board_px = even(min(900, TRAP_W - 120))
+    # Board: ~900px, centered, starts below title with gap
+    board_px = even(900)
     board_img = _board_to_pil(board, board_px, last_move, last_move)
     bx = (TRAP_W - board_px) // 2
-    by = title_y + th + 56
+    by = 280  # measured approximate board top
     canvas_rgba = canvas.convert("RGBA")
     canvas_rgba.paste(board_img, (bx, by), board_img)
     canvas = canvas_rgba.convert("RGB")
     draw = ImageDraw.Draw(canvas)
 
-    # SAN under board
     if move_label:
-        move_font = load_font(42, bold=True)
+        move_font = load_font(40, bold=True)
         label = fit_text(draw, move_label, move_font, TRAP_W - 80)
         bbox3 = draw.textbbox((0, 0), label, font=move_font)
         mw = bbox3[2] - bbox3[0]
-        my = by + board_px + 28
+        my = by + board_px + 36
         draw.text(((TRAP_W - mw) / 2, my), label, font=move_font, fill=MOVE_YELLOW)
 
     return normalize_frame(canvas, TRAP_W, TRAP_H)
 
 
 def trap_intro_card(ctx: TrapRenderContext) -> Image.Image:
-    """Opening board (starting position) + title — matches reference first frame."""
+    """Starting position + title — reference frame 0."""
     canvas = Image.new("RGB", (TRAP_W, TRAP_H), BG)
     draw = ImageDraw.Draw(canvas)
 
-    title_font = load_font(72, bold=True)
+    title_font = load_font(64, bold=True)
     title = ctx.series_title or "Famous Traps"
     bbox = draw.textbbox((0, 0), title, font=title_font)
     tw = bbox[2] - bbox[0]
-    th = bbox[3] - bbox[1]
-    title_y = 120
+    title_y = 154
     draw.text(((TRAP_W - tw) / 2, title_y), title, font=title_font, fill=TITLE_YELLOW)
 
     board = chess.Board()
-    board_px = even(min(900, TRAP_W - 120))
+    board_px = even(900)
     board_img = _board_to_pil(board, board_px, last_move=None, arrow_move=None)
     bx = (TRAP_W - board_px) // 2
-    by = title_y + th + 56
+    by = 280
     canvas_rgba = canvas.convert("RGBA")
     canvas_rgba.paste(board_img, (bx, by), board_img)
     canvas = canvas_rgba.convert("RGB")
