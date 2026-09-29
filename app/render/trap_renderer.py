@@ -17,12 +17,11 @@ from app.config import settings
 from app.utils import even, fit_text, load_font, normalize_frame
 
 TRAP_W, TRAP_H = 1080, 1920
-TITLE_YELLOW = "#FFD54F"       # brighter gold-yellow like reference
+TITLE_YELLOW = "#FFD54F"
 MOVE_YELLOW = "#FFD54F"
 ARROW_YELLOW = "#F5C518"
 HIGHLIGHT = "#C9A227"
 BG = "#0A0A0A"
-# Dark board (reference style — charcoal / slate)
 SQ_LIGHT = "#4A4A4A"
 SQ_DARK = "#2B2B2B"
 
@@ -82,46 +81,46 @@ def render_trap_frame(
     canvas = Image.new("RGB", (TRAP_W, TRAP_H), BG)
     draw = ImageDraw.Draw(canvas)
 
-    # Large bright series title (reference style)
-    title_font = load_font(78, bold=True)
+    # BIG bright series title — reference size
+    title_font = load_font(120, bold=True)
     title = ctx.series_title or "Famous Traps"
     bbox = draw.textbbox((0, 0), title, font=title_font)
     tw = bbox[2] - bbox[0]
-    draw.text(((TRAP_W - tw) / 2, 70), title, font=title_font, fill=TITLE_YELLOW)
+    th = bbox[3] - bbox[1]
+    title_y = 50
+    draw.text(((TRAP_W - tw) / 2, title_y), title, font=title_font, fill=TITLE_YELLOW)
 
-    # Trap name under title (subtle)
-    sub_y = 160
+    # Trap name under title
     if ctx.trap_name:
-        sub_font = load_font(30)
+        sub_font = load_font(36)
         sub = fit_text(draw, ctx.trap_name, sub_font, TRAP_W - 80)
         bbox2 = draw.textbbox((0, 0), sub, font=sub_font)
         sw = bbox2[2] - bbox2[0]
-        draw.text(((TRAP_W - sw) / 2, sub_y), sub, font=sub_font, fill="#BBBBBB")
-        board_top = 220
+        sub_y = title_y + th + 24
+        draw.text(((TRAP_W - sw) / 2, sub_y), sub, font=sub_font, fill="#CCCCCC")
+        board_top = sub_y + 50
     else:
-        board_top = 190
+        board_top = title_y + th + 36
 
-    # Larger board, centered with balanced margins
-    board_px = even(min(1000, TRAP_W - 60))
+    # Board — slightly smaller so title has room
+    board_px = even(min(960, TRAP_W - 80))
     board_img = _board_to_pil(board, board_px, last_move, last_move)
     bx = (TRAP_W - board_px) // 2
-    by = board_top
+    by = max(board_top, 200)
     canvas_rgba = canvas.convert("RGBA")
     canvas_rgba.paste(board_img, (bx, by), board_img)
     canvas = canvas_rgba.convert("RGB")
     draw = ImageDraw.Draw(canvas)
 
-    # SAN move label under board
     if move_label:
-        move_font = load_font(52, bold=True)
+        move_font = load_font(56, bold=True)
         label = fit_text(draw, move_label, move_font, TRAP_W - 80)
         bbox3 = draw.textbbox((0, 0), label, font=move_font)
         mw = bbox3[2] - bbox3[0]
-        my = by + board_px + 40
+        my = by + board_px + 36
         draw.text(((TRAP_W - mw) / 2, my), label, font=move_font, fill=MOVE_YELLOW)
 
-    # Soft brand watermark
-    brand_font = load_font(20)
+    brand_font = load_font(22)
     brand = settings.brand_hashtag
     bbox4 = draw.textbbox((0, 0), brand, font=brand_font)
     bw = bbox4[2] - bbox4[0]
@@ -133,20 +132,23 @@ def render_trap_frame(
 def trap_intro_card(ctx: TrapRenderContext) -> Image.Image:
     canvas = Image.new("RGB", (TRAP_W, TRAP_H), BG)
     draw = ImageDraw.Draw(canvas)
-    title_font = load_font(88, bold=True)
+
+    # Extra-large intro title
+    title_font = load_font(140, bold=True)
     title = ctx.series_title or "Famous Traps"
     bbox = draw.textbbox((0, 0), title, font=title_font)
     tw = bbox[2] - bbox[0]
-    draw.text(((TRAP_W - tw) / 2, TRAP_H / 2 - 90), title, font=title_font, fill=TITLE_YELLOW)
+    th = bbox[3] - bbox[1]
+    draw.text(((TRAP_W - tw) / 2, TRAP_H / 2 - th - 40), title, font=title_font, fill=TITLE_YELLOW)
 
     if ctx.trap_name:
-        sub_font = load_font(40)
+        sub_font = load_font(48)
         sub = fit_text(draw, ctx.trap_name, sub_font, TRAP_W - 100)
         bbox2 = draw.textbbox((0, 0), sub, font=sub_font)
         sw = bbox2[2] - bbox2[0]
         draw.text(((TRAP_W - sw) / 2, TRAP_H / 2 + 30), sub, font=sub_font, fill="#DDDDDD")
 
-    brand_font = load_font(24)
+    brand_font = load_font(26)
     brand = settings.brand_hashtag
     bbox3 = draw.textbbox((0, 0), brand, font=brand_font)
     bw = bbox3[2] - bbox3[0]
