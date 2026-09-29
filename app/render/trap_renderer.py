@@ -1,46 +1,39 @@
 """
-Famous Traps style — clean educational Shorts matching reference:
-  pure dark canvas, LARGE bright yellow title, dark board,
-  thick vivid yellow arrows + gold last-move highlights, SAN under board.
+Famous Traps style — pixel-match reference educational Shorts:
+  soft gold title, dark-green board, clean yellow arrows + square highlights,
+  SAN under board, generous black margins (9:16).
 """
 from __future__ import annotations
 
 import io
-import re
 from dataclasses import dataclass
 
 import cairosvg
 import chess
 import chess.svg
-from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from PIL import Image, ImageDraw
 
 from app.config import settings
 from app.utils import even, fit_text, load_font, normalize_frame
 
 TRAP_W, TRAP_H = 1080, 1920
-# Vivid bright yellow (reference pop)
-TITLE_YELLOW = "#FFCC00"
-MOVE_YELLOW = "#FFCC00"
-ARROW_YELLOW = "#FFCC00"
-HIGHLIGHT = "#E6B800"
-BG = "#0A0A0A"
-SQ_LIGHT = "#3D3D3D"
-SQ_DARK = "#262626"
+
+# Reference palette (from vOew1 frames)
+TITLE_YELLOW = "#E8C84A"   # soft gold, not neon
+MOVE_YELLOW = "#E8C84A"
+ARROW_YELLOW = "#E8C84A"
+HIGHLIGHT = "#C9A84C"      # muted gold last-move squares
+BG = "#0D0D0D"
+# Dark green board (reference) — not charcoal gray
+SQ_LIGHT = "#5A6B52"
+SQ_DARK = "#3A4636"
 
 
 @dataclass
 class TrapRenderContext:
     series_title: str = "Famous Traps"
     trap_name: str = ""
-    theme: str = "dark"
-
-
-def _thicken_arrows(svg: str, factor: float = 1.55) -> str:
-    """Boost arrow stroke-width so arrows read clearly on dark board."""
-    def _bump(m: re.Match) -> str:
-        w = float(m.group(1)) * factor
-        return f'stroke-width="{w:.1f}"'
-    return re.sub(r'stroke-width="([\d.]+)"(?=[^>]*class="arrow")', _bump, svg)
+    theme: str = "dark_green"
 
 
 def _board_to_pil(
@@ -55,7 +48,7 @@ def _board_to_pil(
         "square light lastmove": HIGHLIGHT,
         "square dark lastmove": HIGHLIGHT,
         "margin": BG,
-        "coord": "#9A9A9A",
+        "coord": "#8A9A82",
     }
     arrows = []
     if arrow_move:
@@ -72,37 +65,14 @@ def _board_to_pil(
         lastmove=last_move,
         colors=fill,
         arrows=arrows,
-        coordinates=True,
+        coordinates=False,  # reference has no a-h / 1-8 labels
     )
-    if arrows:
-        svg_data = _thicken_arrows(svg_data, factor=1.6)
     png_bytes = cairosvg.svg2png(
         bytestring=svg_data.encode("utf-8"),
         output_width=size,
         output_height=size,
     )
     return Image.open(io.BytesIO(png_bytes)).convert("RGBA")
-
-
-def _draw_title_glow(
-    canvas: Image.Image,
-    text: str,
-    font: ImageFont.ImageFont,
-    xy: tuple[float, float],
-    fill: str,
-) -> None:
-    """Draw bright title with soft glow for reference-style pop."""
-    # Glow layer
-    glow = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
-    gdraw = ImageDraw.Draw(glow)
-    gdraw.text(xy, text, font=font, fill=(255, 204, 0, 140))
-    glow = glow.filter(ImageFilter.GaussianBlur(radius=8))
-    base = canvas.convert("RGBA")
-    base = Image.alpha_composite(base, glow)
-    # Crisp text on top
-    draw = ImageDraw.Draw(base)
-    draw.text(xy, text, font=font, fill=fill)
-    canvas.paste(base.convert("RGB"))
 
 
 def render_trap_frame(
@@ -114,81 +84,59 @@ def render_trap_frame(
     canvas = Image.new("RGB", (TRAP_W, TRAP_H), BG)
     draw = ImageDraw.Draw(canvas)
 
-    title_font = load_font(120, bold=True)
+    # Soft gold title — reference size (~72px), centered, clean (no glow)
+    title_font = load_font(72, bold=True)
     title = ctx.series_title or "Famous Traps"
     bbox = draw.textbbox((0, 0), title, font=title_font)
     tw = bbox[2] - bbox[0]
     th = bbox[3] - bbox[1]
-    title_x = (TRAP_W - tw) / 2
-    title_y = 48
-    _draw_title_glow(canvas, title, title_font, (title_x, title_y), TITLE_YELLOW)
-    draw = ImageDraw.Draw(canvas)
+    title_y = 120
+    draw.text(((TRAP_W - tw) / 2, title_y), title, font=title_font, fill=TITLE_YELLOW)
 
-    if ctx.trap_name:
-        sub_font = load_font(34)
-        sub = fit_text(draw, ctx.trap_name, sub_font, TRAP_W - 80)
-        bbox2 = draw.textbbox((0, 0), sub, font=sub_font)
-        sw = bbox2[2] - bbox2[0]
-        sub_y = title_y + th + 18
-        draw.text(((TRAP_W - sw) / 2, sub_y), sub, font=sub_font, fill="#D0D0D0")
-        board_top = sub_y + 44
-    else:
-        board_top = title_y + th + 28
-
-    board_px = even(min(960, TRAP_W - 80))
+    # Board: generous top/bottom black space like reference
+    board_px = even(min(900, TRAP_W - 120))
     board_img = _board_to_pil(board, board_px, last_move, last_move)
     bx = (TRAP_W - board_px) // 2
-    by = max(int(board_top), 200)
+    by = title_y + th + 56
     canvas_rgba = canvas.convert("RGBA")
     canvas_rgba.paste(board_img, (bx, by), board_img)
     canvas = canvas_rgba.convert("RGB")
     draw = ImageDraw.Draw(canvas)
 
+    # SAN under board
     if move_label:
-        move_font = load_font(56, bold=True)
+        move_font = load_font(42, bold=True)
         label = fit_text(draw, move_label, move_font, TRAP_W - 80)
         bbox3 = draw.textbbox((0, 0), label, font=move_font)
         mw = bbox3[2] - bbox3[0]
-        my = by + board_px + 32
-        # slight glow on SAN too
-        _draw_title_glow(canvas, label, move_font, ((TRAP_W - mw) / 2, my), MOVE_YELLOW)
-        draw = ImageDraw.Draw(canvas)
-
-    brand_font = load_font(22)
-    brand = settings.brand_hashtag
-    bbox4 = draw.textbbox((0, 0), brand, font=brand_font)
-    bw = bbox4[2] - bbox4[0]
-    draw.text(((TRAP_W - bw) / 2, TRAP_H - 55), brand, font=brand_font, fill="#444444")
+        my = by + board_px + 28
+        draw.text(((TRAP_W - mw) / 2, my), label, font=move_font, fill=MOVE_YELLOW)
 
     return normalize_frame(canvas, TRAP_W, TRAP_H)
 
 
 def trap_intro_card(ctx: TrapRenderContext) -> Image.Image:
+    """Opening board (starting position) + title — matches reference first frame."""
     canvas = Image.new("RGB", (TRAP_W, TRAP_H), BG)
     draw = ImageDraw.Draw(canvas)
 
-    title_font = load_font(140, bold=True)
+    title_font = load_font(72, bold=True)
     title = ctx.series_title or "Famous Traps"
     bbox = draw.textbbox((0, 0), title, font=title_font)
     tw = bbox[2] - bbox[0]
     th = bbox[3] - bbox[1]
-    tx = (TRAP_W - tw) / 2
-    ty = TRAP_H / 2 - th - 40
-    _draw_title_glow(canvas, title, title_font, (tx, ty), TITLE_YELLOW)
-    draw = ImageDraw.Draw(canvas)
+    title_y = 120
+    draw.text(((TRAP_W - tw) / 2, title_y), title, font=title_font, fill=TITLE_YELLOW)
 
-    if ctx.trap_name:
-        sub_font = load_font(46)
-        sub = fit_text(draw, ctx.trap_name, sub_font, TRAP_W - 100)
-        bbox2 = draw.textbbox((0, 0), sub, font=sub_font)
-        sw = bbox2[2] - bbox2[0]
-        draw.text(((TRAP_W - sw) / 2, TRAP_H / 2 + 28), sub, font=sub_font, fill="#E0E0E0")
+    board = chess.Board()
+    board_px = even(min(900, TRAP_W - 120))
+    board_img = _board_to_pil(board, board_px, last_move=None, arrow_move=None)
+    bx = (TRAP_W - board_px) // 2
+    by = title_y + th + 56
+    canvas_rgba = canvas.convert("RGBA")
+    canvas_rgba.paste(board_img, (bx, by), board_img)
+    canvas = canvas_rgba.convert("RGB")
 
-    brand_font = load_font(26)
-    brand = settings.brand_hashtag
-    bbox3 = draw.textbbox((0, 0), brand, font=brand_font)
-    bw = bbox3[2] - bbox3[0]
-    draw.text(((TRAP_W - bw) / 2, TRAP_H - 80), brand, font=brand_font, fill="#555555")
     return normalize_frame(canvas, TRAP_W, TRAP_H)
 
 

@@ -1,6 +1,6 @@
 FROM python:3.12-slim
 
-ARG BUILD_ID=famous-traps-v2-bright-20260930
+ARG BUILD_ID=famous-traps-v3-refcolors-20260930
 ENV CHESS64_BUILD_ID=${BUILD_ID}
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
