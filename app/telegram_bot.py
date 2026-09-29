@@ -1,7 +1,10 @@
 """
 Telegram bot implementing every command from the Chess64 Elite Academy spec.
-Single polling instance (Railway) — see scripts/start.sh for the lock that
-prevents a duplicate-instance `getUpdates` Conflict.
+Single polling instance (Railway).
+
+Two video styles:
+  - Pro studio (photos/flags/navy+gold) → /pgn, uploaded games
+  - Famous Traps (dark vertical educational) → /trap, /trapofday, /traps
 """
 from __future__ import annotations
 
@@ -25,18 +28,70 @@ from app.pipeline import run_job
 from app.storage import Job, clear_manual_assets, new_job, user_state
 from app.youtube.upload import upload_video
 
+try:
+    from app.trap_pipeline import run_trap_job
+except ImportError:
+    run_trap_job = None  # type: ignore
+
 logger = logging.getLogger("chess64.bot")
 
 TRAP_LIBRARY = {
-    "scholars mate": "1. e4 e5 2. Bc4 Nc6 3. Qh5 Nf6?? 4. Qxf7#",
-    "legal trap": "1. e4 e5 2. Nf3 d6 3. Bc4 Bg4 4. Nc3 g6 5. Nxe5 Bxd1 6. Bxf7+ Ke7 7. Nd5#",
-    "fried liver": "1. e4 e5 2. Nf3 Nc6 3. Bc4 Nf6 4. Ng5 d5 5. exd5 Nxd5 6. Nxf7",
+    "scholars mate": ("Scholar's Mate", "1. e4 e5 2. Bc4 Nc6 3. Qh5 Nf6 4. Qxf7#"),
+    "scholars_mate": ("Scholar's Mate", "1. e4 e5 2. Bc4 Nc6 3. Qh5 Nf6 4. Qxf7#"),
+    "legal trap": ("Legal's Mate", "1. e4 e5 2. Nf3 d6 3. Bc4 Bg4 4. Nc3 g6 5. Nxe5 Bxd1 6. Bxf7+ Ke7 7. Nd5#"),
+    "legals_mate": ("Legal's Mate", "1. e4 e5 2. Nf3 d6 3. Bc4 Bg4 4. Nc3 g6 5. Nxe5 Bxd1 6. Bxf7+ Ke7 7. Nd5#"),
+    "fried liver": (
+        "Fried Liver Attack",
+        "1. e4 e5 2. Nf3 Nc6 3. Bc4 Nf6 4. Ng5 d5 5. exd5 Nxd5 6. Nxf7 Kxf7 7. Qf3+ Ke6 8. Nc3 Ncb4 9. Qe4 c6 10. a3 Na6 11. d4",
+    ),
+    "fried_liver": (
+        "Fried Liver Attack",
+        "1. e4 e5 2. Nf3 Nc6 3. Bc4 Nf6 4. Ng5 d5 5. exd5 Nxd5 6. Nxf7 Kxf7 7. Qf3+ Ke6 8. Nc3 Ncb4 9. Qe4 c6 10. a3 Na6 11. d4",
+    ),
+    "blackburne": (
+        "Blackburne Shilling",
+        "1. e4 e5 2. Nf3 Nc6 3. Bc4 Nd4 4. Nxe5 Qg5 5. Nxf7 Qxg2 6. Rf1 Qxe4+ 7. Be2 Nf3#",
+    ),
+    "blackburne_shilling": (
+        "Blackburne Shilling",
+        "1. e4 e5 2. Nf3 Nc6 3. Bc4 Nd4 4. Nxe5 Qg5 5. Nxf7 Qxg2 6. Rf1 Qxe4+ 7. Be2 Nf3#",
+    ),
+    "stafford": (
+        "Stafford Gambit",
+        "1. e4 e5 2. Nf3 Nf6 3. Nxe5 Nc6 4. Nxc6 dxc6 5. d3 Bc5 6. Bg5 Nxe4 7. Bxd8 Bxf2+ 8. Ke2 Bg4#",
+    ),
+    "englund": (
+        "Englund Gambit Trap",
+        "1. d4 e5 2. dxe5 Nc6 3. Nf3 Qe7 4. Bf4 Qb4+ 5. Bd2 Qxb2 6. Bc3 Bb4 7. Qd2 Bxc3 8. Qxc3 Qc1#",
+    ),
+    "lasker": (
+        "Lasker Trap",
+        "1. d4 d5 2. c4 e5 3. dxe5 d4 4. e3 Bb4+ 5. Bd2 dxe3 6. Bxb4 exf2+ 7. Ke2 fxg1=N+ 8. Rxg1 Bg4+",
+    ),
+    "fishing_pole": ("Fishing Pole", "1. e4 e5 2. Nf3 Nc6 3. Bb5 Nf6 4. O-O Ng4 5. h3 h5"),
 }
+
+
+def _resolve_trap(name: str):
+    key = name.lower().strip().replace("-", "_")
+    key_space = name.lower().strip()
+    if key in TRAP_LIBRARY:
+        return TRAP_LIBRARY[key]
+    if key_space in TRAP_LIBRARY:
+        return TRAP_LIBRARY[key_space]
+    for k, v in TRAP_LIBRARY.items():
+        if key in k or key_space in k or key in v[0].lower():
+            return v
+    traps_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "traps")
+    pgn_path = os.path.join(traps_dir, f"{key}.pgn")
+    if os.path.isfile(pgn_path):
+        return (key.replace("_", " ").title(), open(pgn_path, encoding="utf-8").read())
+    return None
 
 
 def _authorized(user_id: int) -> bool:
     if not settings.allowed_user_ids:
-        return True  # open mode if not configured
+        return True
     return user_id in settings.allowed_user_ids
 
 
@@ -44,18 +99,16 @@ async def _guard(update: Update) -> bool:
     user = update.effective_user
     if not user or not _authorized(user.id):
         if update.message:
-            await update.message.reply_text("🚫 You're not authorized to use this bot.")
+            await update.message.reply_text("You're not authorized to use this bot.")
         return False
     return True
 
-
-# ---------------------------------------------------------------- basic ----
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not await _guard(update):
         return
     await update.message.reply_text(
-        f"♟ Welcome to {settings.channel_name}!\n\n"
+        f"Welcome to {settings.channel_name}!\n\n"
         "Send /help to see everything I can do.",
     )
 
@@ -66,19 +119,17 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         "*Chess64 Elite Academy Bot*\n\n"
         "/silent <player or game hint> — fetch/build a silent board video\n"
-        "/pgn — then paste PGN, or send a .pgn file\n"
+        "/pgn — paste PGN or send .pgn file *(pro studio style)*\n"
         "/duration <sec> — move duration (default 4)\n"
         "/theme green|brown|blue|purple\n"
         "/setwhite /setblack — then send a photo for that side\n"
         "/setwhiteflag <CC> /setblackflag <CC> — e.g. IR, US, IN\n"
         "/clearphotos — clear manual photo/flag overrides\n"
-        "/trapofday /trap <name> /traps /trend — trap content\n\n"
+        "/trapofday /trap <name> /traps /trend — *Famous Traps* style (dark vertical)\n\n"
         "After rendering, tap *Send on Telegram* or *Upload to YouTube*.",
         parse_mode=ParseMode.MARKDOWN,
     )
 
-
-# ---------------------------------------------------------------- settings ----
 
 async def cmd_duration(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not await _guard(update):
@@ -92,7 +143,7 @@ async def cmd_duration(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         if not (1 <= val <= 15):
             raise ValueError
         st["duration"] = val
-        await update.message.reply_text(f"✅ Duration set to {val}s/move.")
+        await update.message.reply_text(f"Duration set to {val}s/move.")
     except ValueError:
         await update.message.reply_text("Please give a number of seconds between 1 and 15.")
 
@@ -105,21 +156,21 @@ async def cmd_theme(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text("Usage: /theme green|brown|blue|purple")
         return
     st["theme"] = context.args[0].lower()
-    await update.message.reply_text(f"✅ Theme set to {st['theme']}.")
+    await update.message.reply_text(f"Theme set to {st['theme']}.")
 
 
 async def cmd_setwhite(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not await _guard(update):
         return
     user_state(update.effective_user.id)["awaiting"] = "photo_white"
-    await update.message.reply_text("📸 Send a photo for White now.")
+    await update.message.reply_text("Send a photo for White now.")
 
 
 async def cmd_setblack(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not await _guard(update):
         return
     user_state(update.effective_user.id)["awaiting"] = "photo_black"
-    await update.message.reply_text("📸 Send a photo for Black now.")
+    await update.message.reply_text("Send a photo for Black now.")
 
 
 async def cmd_setwhiteflag(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -140,14 +191,14 @@ async def _set_flag(update: Update, context: ContextTypes.DEFAULT_TYPE, side: st
         return
     st = user_state(update.effective_user.id)
     st["manual_flags"][side] = context.args[0].upper()
-    await update.message.reply_text(f"✅ {side.title()} flag set to {context.args[0].upper()}.")
+    await update.message.reply_text(f"{side.title()} flag set to {context.args[0].upper()}.")
 
 
 async def cmd_clearphotos(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not await _guard(update):
         return
     clear_manual_assets(update.effective_user.id)
-    await update.message.reply_text("🧹 Manual photos/flags cleared. Auto-resolve is back on.")
+    await update.message.reply_text("Manual photos/flags cleared. Auto-resolve is back on.")
 
 
 async def on_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -165,16 +216,22 @@ async def on_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await file.download_to_drive(dest)
     st["manual_photos"][side] = dest
     st["awaiting"] = None
-    await update.message.reply_text(f"✅ {side.title()} photo saved. It will override auto-resolve.")
+    await update.message.reply_text(f"{side.title()} photo saved. It will override auto-resolve.")
 
-
-# ---------------------------------------------------------------- traps ----
 
 async def cmd_traps(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not await _guard(update):
         return
-    names = "\n".join(f"• {n}" for n in TRAP_LIBRARY)
-    await update.message.reply_text(f"📚 Available traps:\n{names}\n\nUse /trap <name>")
+    seen = set()
+    lines = ["*Famous Traps* (dark educational Shorts style):\n"]
+    for k, v in TRAP_LIBRARY.items():
+        name = v[0]
+        if name in seen:
+            continue
+        seen.add(name)
+        lines.append(f"• {name} — `/trap {k}`")
+    lines.append("\nAlso: /trapofday")
+    await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.MARKDOWN)
 
 
 async def cmd_trapofday(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -182,8 +239,9 @@ async def cmd_trapofday(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         return
     import random
 
-    name, pgn = random.choice(list(TRAP_LIBRARY.items()))
-    await _start_job_from_pgn(update, context, pgn, platform=f"Trap of the Day: {name.title()}")
+    key, val = random.choice(list(TRAP_LIBRARY.items()))
+    display, pgn = val
+    await _start_trap_job(update, context, pgn, trap_name=display)
 
 
 async def cmd_trap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -193,29 +251,29 @@ async def cmd_trap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await cmd_traps(update, context)
         return
     name = " ".join(context.args).lower()
-    pgn = TRAP_LIBRARY.get(name)
-    if not pgn:
+    resolved = _resolve_trap(name)
+    if resolved is None:
         await update.message.reply_text(f"Unknown trap '{name}'. Try /traps to see the list.")
         return
-    await _start_job_from_pgn(update, context, pgn, platform=f"Trap: {name.title()}")
+    display, pgn = resolved
+    await _start_trap_job(update, context, pgn, trap_name=display)
 
 
 async def cmd_trend(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not await _guard(update):
         return
     await update.message.reply_text(
-        "📈 Trending traps this week: Fried Liver, Legal's Mate, Scholar's Mate.\n"
-        "Use /trap <name> to generate a video."
+        "Trending traps: Fried Liver, Legal's Mate, Blackburne Shilling, Stafford.\n"
+        "Use /trap <name> for *Famous Traps* style video.",
+        parse_mode=ParseMode.MARKDOWN,
     )
 
-
-# ---------------------------------------------------------------- PGN / silent ----
 
 async def cmd_pgn(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not await _guard(update):
         return
     user_state(update.effective_user.id)["awaiting"] = "pgn"
-    await update.message.reply_text("📋 Paste your PGN text now, or send a .pgn file.")
+    await update.message.reply_text("Paste your PGN text now, or send a .pgn file.")
 
 
 async def cmd_silent(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -226,14 +284,7 @@ async def cmd_silent(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         return
     hint = " ".join(context.args)
     await update.message.reply_text(
-        f"🔎 Looking for a recent notable game for '{hint}'...\n"
-        "(Wire this to your Chess.com/Lichess recent-games fetcher — see TODO "
-        "in app/telegram_bot.py::cmd_silent.)"
-    )
-    # TODO: fetch a real recent game PGN for `hint` from Chess.com/Lichess API.
-    # For now we fail gracefully rather than fabricate a game.
-    await update.message.reply_text(
-        "I couldn't fetch a live game automatically in this environment. "
+        f"Looking for a recent notable game for '{hint}'...\n"
         "Send /pgn and paste a PGN to render a video."
     )
 
@@ -259,10 +310,54 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await _start_job_from_pgn(update, context, update.message.text, platform="Pasted PGN")
 
 
-# ---------------------------------------------------------------- pipeline glue ----
+async def _start_trap_job(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    pgn_text: str,
+    trap_name: str = "Famous Trap",
+) -> None:
+    if run_trap_job is None:
+        await update.message.reply_text(
+            "Famous Traps renderer not installed yet. Redeploy after famous-traps-v1."
+        )
+        return
+    user_id = update.effective_user.id
+    job = new_job(user_id)
+    status_msg = await update.message.reply_text(
+        f"*Famous Traps* style — rendering *{trap_name}*…",
+        parse_mode=ParseMode.MARKDOWN,
+    )
+    try:
+        import asyncio
 
-async def _start_job_from_pgn(update: Update, context: ContextTypes.DEFAULT_TYPE, pgn_text: str,
-                               platform: str) -> None:
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None, lambda: run_trap_job(job, pgn_text, trap_name=trap_name)
+        )
+        seo = result["seo"]
+        caption = (
+            f"*{seo['title']}*\n\n"
+            f"Style: Famous Traps (dark educational)\n"
+            f"{settings.brand_hashtag}"
+        )
+        keyboard = InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton("Send on Telegram", callback_data=f"send:{job.id}"),
+                    InlineKeyboardButton("Upload to YouTube", callback_data=f"upload:{job.id}"),
+                ]
+            ]
+        )
+        await status_msg.edit_text(f"{trap_name} ready!")
+        await update.message.reply_text(caption, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
+    except Exception as exc:
+        logger.error("Trap job %s failed: %s\n%s", job.id, exc, traceback.format_exc())
+        await status_msg.edit_text(f"Trap render failed: {exc}")
+
+
+async def _start_job_from_pgn(
+    update: Update, context: ContextTypes.DEFAULT_TYPE, pgn_text: str, platform: str
+) -> None:
     user_id = update.effective_user.id
     job = new_job(user_id)
     status_msg = await update.message.reply_text(job.STATUS_LABELS[1])
@@ -274,8 +369,6 @@ async def _start_job_from_pgn(update: Update, context: ContextTypes.DEFAULT_TYPE
             pass
 
     try:
-        # run_job is synchronous/CPU-bound; for a real deployment run this in
-        # a thread/process pool so it doesn't block the event loop.
         import asyncio
 
         loop = asyncio.get_event_loop()
@@ -286,7 +379,7 @@ async def _start_job_from_pgn(update: Update, context: ContextTypes.DEFAULT_TYPE
         game = result["game"]
         seo = result["seo"]
         is_trunc = bool(result.get("truncated") or getattr(game, "truncated", False))
-        truncated_note = "\n⚠️ Game truncated to max move limit." if is_trunc else ""
+        truncated_note = "\nGame truncated to max move limit." if is_trunc else ""
         caption = (
             f"*{seo['title']}*\n{seo['title_hi']}\n\n"
             f"{game.white} vs {game.black} ({game.event or platform})"
@@ -296,15 +389,15 @@ async def _start_job_from_pgn(update: Update, context: ContextTypes.DEFAULT_TYPE
         keyboard = InlineKeyboardMarkup(
             [
                 [
-                    InlineKeyboardButton("📤 Send on Telegram", callback_data=f"send:{job.id}"),
-                    InlineKeyboardButton("▶️ Upload to YouTube", callback_data=f"upload:{job.id}"),
+                    InlineKeyboardButton("Send on Telegram", callback_data=f"send:{job.id}"),
+                    InlineKeyboardButton("Upload to YouTube", callback_data=f"upload:{job.id}"),
                 ]
             ]
         )
         await update.message.reply_text(caption, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
     except Exception as exc:
         logger.error("Job %s failed: %s\n%s", job.id, exc, traceback.format_exc())
-        await status_msg.edit_text(f"❌ Something went wrong: {exc}")
+        await status_msg.edit_text(f"Something went wrong: {exc}")
 
 
 async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -319,16 +412,18 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     if action == "send":
-        await query.message.reply_text("📤 Sending long video + shorts on Telegram...")
+        await query.message.reply_text("Sending long video + shorts on Telegram...")
         with open(job.data["long_video"], "rb") as f:
             await query.message.reply_video(f, caption=job.data["seo"]["title"])
         for short_path in job.data.get("shorts", []):
+            if short_path == job.data["long_video"]:
+                continue
             with open(short_path, "rb") as f:
                 await query.message.reply_video(f)
         await query.message.reply_text(job.data["seo"]["description"])
 
     elif action == "upload":
-        await query.message.reply_text("⬆️ Uploading to YouTube...")
+        await query.message.reply_text("Uploading to YouTube...")
         try:
             seo = job.data["seo"]
             url = upload_video(
@@ -336,12 +431,12 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 title=seo["title"],
                 description=seo["description"],
                 tags=seo["tags"],
-                thumbnail_path=job.data["thumbnails"].get("wide"),
+                thumbnail_path=job.data.get("thumbnails", {}).get("wide"),
             )
-            await query.message.reply_text(f"✅ Uploaded: {url}")
+            await query.message.reply_text(f"Uploaded: {url}")
         except Exception as exc:
-            logger.error("YouTube upload failed: %s\n%s", exp if False else exc, traceback.format_exc())
-            await query.message.reply_text(f"❌ YouTube upload failed: {exc}")
+            logger.error("YouTube upload failed: %s\n%s", exc, traceback.format_exc())
+            await query.message.reply_text(f"YouTube upload failed: {exc}")
 
 
 def build_application() -> Application:
@@ -362,6 +457,7 @@ def build_application() -> Application:
     app.add_handler(CommandHandler("setblackflag", cmd_setblackflag))
     app.add_handler(CommandHandler("clearphotos", cmd_clearphotos))
     app.add_handler(CommandHandler("trapofday", cmd_trapofday))
+    app.add_handler(CommandHandler("trapoftheday", cmd_trapofday))
     app.add_handler(CommandHandler("trap", cmd_trap))
     app.add_handler(CommandHandler("traps", cmd_traps))
     app.add_handler(CommandHandler("trend", cmd_trend))
@@ -376,12 +472,10 @@ def build_application() -> Application:
 
 def run_bot() -> None:
     logging.basicConfig(level=logging.INFO)
-    # httpx logs every request URL at INFO — and Telegram's URLs contain the
-    # bot token, so it would leak into Railway logs. Keep these at WARNING.
     for noisy in ("httpx", "httpcore"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
     app = build_application()
-    logger.info("Chess64 bot starting (polling)...")
+    logger.info("Chess64 bot starting (polling)… famous-traps-v1 enabled")
     app.run_polling(drop_pending_updates=True)
 
 
