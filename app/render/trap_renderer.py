@@ -1,9 +1,7 @@
 """
-Famous Traps — exact visual copy of reference (vOew1).
-Measured from reference frames:
-  BG #0B0C0E | light #3A473E | dark #222824
-  title/arrow/SAN #F8D942 | title ~64px | board ~900px centered
-  no coords, no subtitle, no hashtag on frames
+Famous Traps — vertical educational style.
+Bigger title, Like & Subscribe CTA, Chess64 Elite Academy branding.
+Board palette from reference: light #3A473E / dark #222824 / gold #F8D942
 """
 from __future__ import annotations
 
@@ -20,7 +18,6 @@ from app.utils import even, fit_text, load_font, normalize_frame
 
 TRAP_W, TRAP_H = 1080, 1920
 
-# Exact palette sampled from reference frames
 BG = "#0B0C0E"
 SQ_LIGHT = "#3A473E"
 SQ_DARK = "#222824"
@@ -28,6 +25,11 @@ TITLE_YELLOW = "#F8D942"
 MOVE_YELLOW = "#F2D84C"
 ARROW_YELLOW = "#F9CA26"
 HIGHLIGHT = "#C4A32A"
+BRAND_WHITE = "#F5F0E1"
+CTA_GOLD = "#FFD54A"
+
+BRAND_NAME = "Chess64 Elite Academy"
+CTA_TEXT = "Like & Subscribe"
 
 
 @dataclass
@@ -76,6 +78,24 @@ def _board_to_pil(
     return Image.open(io.BytesIO(png_bytes)).convert("RGBA")
 
 
+def _draw_branding(draw: ImageDraw.ImageDraw, canvas_h: int = TRAP_H) -> None:
+    """Bottom CTA + channel name branding."""
+    cta_font = load_font(36, bold=True)
+    brand_font = load_font(28, bold=True)
+
+    cta = CTA_TEXT
+    bbox = draw.textbbox((0, 0), cta, font=cta_font)
+    cw = bbox[2] - bbox[0]
+    cta_y = canvas_h - 140
+    draw.text(((TRAP_W - cw) / 2, cta_y), cta, font=cta_font, fill=CTA_GOLD)
+
+    brand = BRAND_NAME
+    bbox2 = draw.textbbox((0, 0), brand, font=brand_font)
+    bw = bbox2[2] - bbox2[0]
+    brand_y = cta_y + 48
+    draw.text(((TRAP_W - bw) / 2, brand_y), brand, font=brand_font, fill=BRAND_WHITE)
+
+
 def render_trap_frame(
     ctx: TrapRenderContext,
     board: chess.Board,
@@ -85,20 +105,19 @@ def render_trap_frame(
     canvas = Image.new("RGB", (TRAP_W, TRAP_H), BG)
     draw = ImageDraw.Draw(canvas)
 
-    # Title: reference measured ~65px tall, ~529px wide → font 64
-    title_font = load_font(64, bold=True)
+    # Bigger title
+    title_font = load_font(96, bold=True)
     title = ctx.series_title or "Famous Traps"
     bbox = draw.textbbox((0, 0), title, font=title_font)
     tw = bbox[2] - bbox[0]
-    th = bbox[3] - bbox[1]
-    title_y = 154  # measured from reference
+    title_y = 110
     draw.text(((TRAP_W - tw) / 2, title_y), title, font=title_font, fill=TITLE_YELLOW)
 
-    # Board: ~900px, centered, starts below title with gap
-    board_px = even(900)
+    # Board centered with room for bottom branding
+    board_px = even(860)
     board_img = _board_to_pil(board, board_px, last_move, last_move)
     bx = (TRAP_W - board_px) // 2
-    by = 280  # measured approximate board top
+    by = 260
     canvas_rgba = canvas.convert("RGBA")
     canvas_rgba.paste(board_img, (bx, by), board_img)
     canvas = canvas_rgba.convert("RGB")
@@ -109,33 +128,36 @@ def render_trap_frame(
         label = fit_text(draw, move_label, move_font, TRAP_W - 80)
         bbox3 = draw.textbbox((0, 0), label, font=move_font)
         mw = bbox3[2] - bbox3[0]
-        my = by + board_px + 36
+        my = by + board_px + 28
         draw.text(((TRAP_W - mw) / 2, my), label, font=move_font, fill=MOVE_YELLOW)
 
+    _draw_branding(draw)
     return normalize_frame(canvas, TRAP_W, TRAP_H)
 
 
 def trap_intro_card(ctx: TrapRenderContext) -> Image.Image:
-    """Starting position + title — reference frame 0."""
+    """Starting position + big title + branding."""
     canvas = Image.new("RGB", (TRAP_W, TRAP_H), BG)
     draw = ImageDraw.Draw(canvas)
 
-    title_font = load_font(64, bold=True)
+    title_font = load_font(96, bold=True)
     title = ctx.series_title or "Famous Traps"
     bbox = draw.textbbox((0, 0), title, font=title_font)
     tw = bbox[2] - bbox[0]
-    title_y = 154
+    title_y = 110
     draw.text(((TRAP_W - tw) / 2, title_y), title, font=title_font, fill=TITLE_YELLOW)
 
     board = chess.Board()
-    board_px = even(900)
+    board_px = even(860)
     board_img = _board_to_pil(board, board_px, last_move=None, arrow_move=None)
     bx = (TRAP_W - board_px) // 2
-    by = 280
+    by = 260
     canvas_rgba = canvas.convert("RGBA")
     canvas_rgba.paste(board_img, (bx, by), board_img)
     canvas = canvas_rgba.convert("RGB")
+    draw = ImageDraw.Draw(canvas)
 
+    _draw_branding(draw)
     return normalize_frame(canvas, TRAP_W, TRAP_H)
 
 
